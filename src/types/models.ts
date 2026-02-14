@@ -20,19 +20,35 @@ export interface StockMovement {
   quantity: number;
   date: Date;
   note?: string;
+  paymentMethod?: 'cash' | 'd-money' | 'waafi' | 'cac-pay' | 'saba-pay' | 'card';
 }
 
 export interface CartItem {
   product: Product;
   quantity: number;
+  subtotal?: number; // Calculated field
 }
 
 export interface Sale {
   id: string;
   items: CartItem[];
-  total: number;
+  total: number; // legacy field
+  totalBrut: number;
+  vatRate: number;
+  vatTotal: number;
+  discount: number;
+  totalFinal: number;
+  amountGiven: number;
+  change: number;
   date: Date;
-  paymentMethod: 'cash' | 'card';
+  paymentMethod: 'cash' | 'd-money' | 'waafi' | 'cac-pay' | 'saba-pay' | 'card'; // Make this strict
+  userId?: string;
+}
+
+export interface Settings {
+  id: string;
+  userId: string;
+  vatRate: number;
 }
 
 export const categories = [

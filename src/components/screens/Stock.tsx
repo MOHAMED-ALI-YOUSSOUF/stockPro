@@ -120,13 +120,13 @@ const Stock = () => {
       </div>
 
       <div className="relative flex-1">
-         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          <Input
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <Input
           placeholder="Rechercher un mouvement..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-10 h-11 rounded-xl shadow-sm focus:ring-2 focus:ring-primary/40"
-         />  
+        />
       </div>
 
       <div className="bg-card rounded-2xl border border-border overflow-hidden">
@@ -189,7 +189,16 @@ const Stock = () => {
                         {format(new Date(movement.date), 'dd MMM yyyy, HH:mm', { locale: fr })}
                       </div>
                     </td>
-                    <td className="p-4 text-muted-foreground">{movement.note || '-'}</td>
+                    <td className="p-4 text-muted-foreground text-xs italic">
+                      <div className="flex flex-col">
+                        <span>{movement.note || '-'}</span>
+                        {movement.paymentMethod && (
+                          <span className="text-[10px] uppercase font-bold text-primary/70">
+                            Via {movement.paymentMethod}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}

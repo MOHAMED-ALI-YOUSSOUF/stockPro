@@ -25,8 +25,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [session, setSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
-    const [role, setRole] = useState<UserRole | null>(null);
-    const [fullName, setFullName] = useState<string | null>(null);
+    const [role, setRole] = useState<UserRole | null>(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('stockpro_user_role') as UserRole | null;
+        }
+        return null;
+    });
+    const [fullName, setFullName] = useState<string | null>(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('stockpro_user_name');
+        }
+        return null;
+    });
     const [inactiveMessage, setInactiveMessage] = useState<string | null>(null);
 
     const fetchUserMeta = useCallback(async (userId: string) => {
@@ -46,6 +56,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             .maybeSingle();
 
         setFullName(profile?.full_name || null);
+
+        // Cache for offline
+        if (roleData?.role) localStorage.setItem('stockpro_user_role', roleData.role);
+        if (profile?.full_name) localStorage.setItem('stockpro_user_name', profile.full_name);
 
         // Si le compte n'est pas activé
         if (profile && !profile.is_active) {
@@ -68,6 +82,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 } else {
                     setRole(null);
                     setFullName(null);
+                    localStorage.removeItem('stockpro_user_role');
+                    localStorage.removeItem('stockpro_user_name');
                 }
                 setLoading(false);
             }

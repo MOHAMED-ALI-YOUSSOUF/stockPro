@@ -78,7 +78,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="lg:p-6 space-y-6">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Tableau de bord</h1>
         <p className="text-muted-foreground mt-1">Vue d'ensemble de votre inventaire</p>
@@ -98,7 +98,7 @@ export default function Dashboard() {
                 </div>
 
                 <div>
-                  <p className="text-xs lg:text-lg uppercase tracking-wide text-muted-foreground">
+                  <p className="text-xs lg:text- uppercase tracking-wide text-muted-foreground">
                     {stat.label}
                   </p>
                   <p className="text-2xs lg:text-2xl font-semibold leading-tight">

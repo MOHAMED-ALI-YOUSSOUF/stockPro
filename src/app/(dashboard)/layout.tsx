@@ -14,7 +14,7 @@ export default function DashboardLayout({
 }) {
     const { user, loading } = useAuth();
     const router = useRouter();
-    const { setUserId, loadData, syncPendingOps } = useStore();
+    const { setUserId, loadData } = useStore();
 
     // Auth check
     useEffect(() => {
@@ -32,15 +32,6 @@ export default function DashboardLayout({
             setUserId(null);
         }
     }, [user, setUserId, loadData]);
-
-    // Sync pending ops when coming back online
-    useEffect(() => {
-        const handleOnline = () => {
-            syncPendingOps();
-        };
-        window.addEventListener('online', handleOnline);
-        return () => window.removeEventListener('online', handleOnline);
-    }, [syncPendingOps]);
 
     if (loading) {
         return (

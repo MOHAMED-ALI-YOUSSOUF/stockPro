@@ -15,16 +15,20 @@ import {
     Wifi,
     WifiOff,
     Loader2,
+    History,
+    Receipt,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
-import { hasPendingOps } from '@/lib/offlineSync';
+import { processQueue } from '@/lib/offlineSync';
 
 const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Tableau de bord' },
     { to: '/products', icon: Package, label: 'Produits' },
     { to: '/pos', icon: ShoppingCart, label: 'Point de Vente' },
+    { to: '/history', icon: History, label: 'Historique' },
+    { to: '/receipts', icon: Receipt, label: 'Tickets' },
     { to: '/stock', icon: ArrowLeftRight, label: 'Stock' },
     { to: '/reports', icon: BarChart3, label: 'Rapports' },
 ];
@@ -37,7 +41,7 @@ export const Layout = ({ children }: LayoutProps) => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [online, setOnline] = useState(true); // Default to true to avoid hydration mismatch
     const { user, fullName, role, signOut } = useAuth();
-    const { isSyncing } = useStore();
+    const { isSyncing, pendingOps } = useStore();
 
     useEffect(() => {
         setOnline(navigator.onLine);
@@ -51,6 +55,13 @@ export const Layout = ({ children }: LayoutProps) => {
         };
     }, []);
 
+    // Auto-sync when online
+    useEffect(() => {
+        if (online && pendingOps > 0 && !isSyncing) {
+            processQueue();
+        }
+    }, [online, pendingOps, isSyncing]);
+
     const initials = fullName
         ? fullName
             .split(' ')
@@ -59,8 +70,6 @@ export const Layout = ({ children }: LayoutProps) => {
             .toUpperCase()
             .slice(0, 2)
         : user?.email?.slice(0, 2).toUpperCase() || 'U';
-
-    const pendingOps = hasPendingOps();
 
     return (
         <div className="min-h-screen flex">
@@ -151,7 +160,7 @@ export const Layout = ({ children }: LayoutProps) => {
                                 {isSyncing
                                     ? 'Synchronisation...'
                                     : online
-                                        ? pendingOps
+                                        ? pendingOps > 0
                                             ? 'En attente de sync'
                                             : 'En ligne'
                                         : 'Hors ligne'}

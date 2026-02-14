@@ -31,6 +31,11 @@ export interface Database {
         Insert: DbUserRoleInsert;
         Update: Partial<DbUserRoleInsert>;
       };
+      settings: {
+        Row: DbSettings;
+        Insert: DbSettingsInsert;
+        Update: Partial<DbSettingsInsert>;
+      };
     };
   };
 }
@@ -60,6 +65,7 @@ export interface DbStockMovement {
   type: 'in' | 'out' | 'sale';
   quantity: number;
   note: string | null;
+  payment_method: string | null;
   created_at: string;
 }
 
@@ -68,8 +74,15 @@ export type DbStockMovementInsert = Omit<DbStockMovement, 'id' | 'created_at'>;
 export interface DbSale {
   id: string;
   user_id: string;
-  total: number;
-  payment_method: 'cash' | 'card';
+  total: number; // legacy, kept for backward compat
+  total_brut: number;
+  vat_rate_snapshot: number;
+  tva_total: number;
+  remise: number;
+  total_final: number;
+  montant_donne: number;
+  reste: number;
+  payment_method: 'cash' | 'd-money' | 'waafi' | 'cac-pay' | 'saba-pay' | 'card'; // Updated
   created_at: string;
 }
 
@@ -79,10 +92,14 @@ export interface DbSaleItem {
   id: string;
   sale_id: string;
   product_id: string;
-  product_name: string;
-  product_price: number;
+  product_name: string; // legacy
+  product_name_snapshot: string;
+  product_price: number; // legacy
+  price_snapshot: number;
   product_cost: number;
   quantity: number;
+  tva_snapshot: number;
+  subtotal: number;
 }
 
 export type DbSaleItemInsert = Omit<DbSaleItem, 'id'>;
@@ -104,3 +121,13 @@ export interface DbUserRole {
 }
 
 export type DbUserRoleInsert = Omit<DbUserRole, 'id'>;
+
+export interface DbSettings {
+  id: string;
+  user_id: string;
+  vat_rate: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type DbSettingsInsert = Omit<DbSettings, 'id' | 'created_at' | 'updated_at'>;

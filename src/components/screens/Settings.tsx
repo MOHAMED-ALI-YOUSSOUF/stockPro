@@ -99,39 +99,43 @@ const Settings = () => {
         {/* General */}
         <div className="bg-card rounded-2xl border border-border p-6">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Package className="w-5 h-5 text-primary" />
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
+              <Package className="w-5 h-5 text-purple-500" />
             </div>
             <div>
-              <h2 className="font-semibold">Général</h2>
-              <p className="text-sm text-muted-foreground">Paramètres généraux de l'application</p>
+              <h2 className="font-semibold">Configuration Boutique</h2>
+              <p className="text-sm text-muted-foreground">Paramètres de vente</p>
             </div>
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between py-3 border-b border-border">
               <div>
-                <p className="font-medium">Nom de la boutique</p>
-                <p className="text-sm text-muted-foreground">StockPro</p>
+                <p className="font-medium">Taux de TVA (%)</p>
+                <p className="text-sm text-muted-foreground">Appliqué par défaut sur les ventes</p>
               </div>
-            </div>
-            <div className="flex items-center justify-between py-3 border-b border-border">
-              <div>
-                <p className="font-medium">Devise</p>
-                <p className="text-sm text-muted-foreground">Euro (€)</p>
-              </div>
-            </div>
-            <div className="flex items-center justify-between py-3">
-              <div>
-                <p className="font-medium">Taux de TVA</p>
-                <p className="text-sm text-muted-foreground">20%</p>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  className="w-24 text-right"
+                  min="0"
+                  max="100"
+                  value={useStore((state: any) => state.vatRate || 0)}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (!isNaN(val)) {
+                      useStore.getState().updateVatRate(val);
+                    }
+                  }}
+                />
+                <span className="text-sm font-medium">%</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Notifications */}
-        <div className="bg-card rounded-2xl border border-border p-6">
+        {/* <div className="bg-card rounded-2xl border border-border p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
               <Bell className="w-5 h-5 text-orange-500" />
@@ -158,7 +162,7 @@ const Settings = () => {
               <Switch defaultChecked />
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Data & Sync */}
         <div className="bg-card rounded-2xl border border-border p-6">

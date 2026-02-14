@@ -26,15 +26,21 @@ const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 const Reports = () => {
   const { products, sales, movements } = useStore();
 
-  const totalRevenue = sales.reduce((acc, s) => acc + s.total, 0);
-  const totalCost = sales.reduce(
-    (acc, s) =>
-      acc +
-      s.items.reduce((itemAcc, item) => itemAcc + item.product.cost * item.quantity, 0),
-    0
-  );
-  const profit = totalRevenue - totalCost;
-  const profitMargin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+  let totalRevenue = 0;
+let totalCost = 0;
+
+for (const sale of sales) {
+  totalRevenue += sale.total;
+
+  for (const item of sale.items) {
+    totalCost += item.product.cost * item.quantity;
+  }
+}
+
+const profit = totalRevenue - totalCost;
+const profitMargin = totalRevenue > 0
+  ? (profit / totalRevenue) * 100
+  : 0;
 
   const categoryData = products.reduce(
     (acc, product) => {
