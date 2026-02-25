@@ -1,4 +1,3 @@
-"use client";
 
 import POS from "@/components/screens/POS";
 

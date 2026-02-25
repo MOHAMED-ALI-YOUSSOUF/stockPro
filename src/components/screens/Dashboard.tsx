@@ -15,6 +15,16 @@ import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
 
 import {
   Card,
@@ -30,6 +40,8 @@ export default function Dashboard() {
     getTotalInventoryValue,
     getTodaySales,
     getRecentMovements,
+    getMonthlySales,
+    storeName,
     isLoading,
   } = useStore();
 
@@ -37,6 +49,7 @@ export default function Dashboard() {
   const inventoryValue = getTotalInventoryValue();
   const todaySales = getTodaySales();
   const recentMovements = getRecentMovements(5);
+  const monthlySales = getMonthlySales();
 
   if (isLoading) {
     return (
@@ -80,8 +93,12 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Tableau de bord</h1>
-        <p className="text-muted-foreground mt-1">Vue d'ensemble de votre inventaire</p>
+        <h1 className="text-2xl lg:text-3xl font-bold text-foreground">
+          {storeName || "Tableau de bord"}
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          {storeName ? "Tableau de bord - Vue d'ensemble" : "Vue d'ensemble de votre inventaire"}
+        </p>
       </div>
 
       {/* KPI GRID COMPACT */}
@@ -138,6 +155,48 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
+
+      {/* MONTHLY REVENUE CHART */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm lg:text-xl flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-primary lg:h-10 lg:w-10" />
+            Ventes Mensuelles (HT)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="h-[300px] lg:h-[400px] pt-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={monthlySales}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+              <XAxis
+                dataKey="month"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#64748B', fontSize: 12 }}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#64748B', fontSize: 12 }}
+                tickFormatter={(value) => `${value}`}
+              />
+              <Tooltip
+                cursor={{ fill: '#F1F5F9' }}
+                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+              />
+              <Bar
+                dataKey="value"
+                name="Ventes (FDJ)"
+                radius={[6, 6, 0, 0]}
+              >
+                {monthlySales.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={index === monthlySales.length - 1 ? '#3B82F6' : '#94A3B8'} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
 
       {/* RECENT MOVEMENTS */}
       <Card className="shadow-sm">

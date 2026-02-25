@@ -1,4 +1,3 @@
-"use client";
 
 import Products from "@/components/screens/Products";
 

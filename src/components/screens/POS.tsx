@@ -1,4 +1,11 @@
+'use client'
 import { useState, useEffect, useRef } from 'react';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useStore } from '@/store/useStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,7 +67,7 @@ const POS = () => {
   const [showScanner, setShowScanner] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
-
+const [showMobileCart, setShowMobileCart] = useState(false);
   // New State for Advanced Cart
   const [discount, setDiscount] = useState<string>(''); // as string for input handling
   const [amountGiven, setAmountGiven] = useState<string>('');
@@ -183,7 +190,7 @@ const POS = () => {
   );
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-6 animate-fade-in overflow-hidden">
+   <div className="h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-6 animate-fade-in overflow-hidden relative">
       {/* Products Section */}
       <div className="flex-1 flex flex-col min-w-0 h-full">
         {/* Search Bar */}
@@ -257,7 +264,7 @@ const POS = () => {
       </div>
 
       {/* Cart Section - Fixed Width */}
-      <div className="w-full lg:w-[400px] flex flex-col bg-card rounded-2xl border border-border shadow-md h-full overflow-hidden">
+    <div className="hidden lg:flex w-[400px] flex-col bg-card rounded-2xl border border-border shadow-md h-full overflow-hidden">
         {/* Cart Header */}
         <div className="p-4 border-b border-border flex items-center justify-between bg-card z-10">
           <div className="flex items-center gap-2">
@@ -410,7 +417,187 @@ const POS = () => {
           </div>
         )}
       </div>
+{/* Floating Cart Button - Mobile */}
+{cart.length > 0 && (
+  <div className="lg:hidden fixed bottom-6 right-6 z-50">
+    <Button
+      size="lg"
+      className="rounded-full shadow-xl h-14 w-14 relative active:scale-95 transition-all"
+      onClick={() => setShowMobileCart(true)}
+    >
+      <ShoppingCart className="w-6 h-6" />
 
+      <span className="absolute -top-2 -right-2 bg-primary text-white text-xs w-6 h-6 rounded-full flex items-center justify-center">
+        {cart.reduce((acc, item) => acc + item.quantity, 0)}
+      </span>
+    </Button>
+  </div>
+)}
+<Sheet open={showMobileCart} onOpenChange={setShowMobileCart}>
+  <SheetContent
+    side="bottom"
+    className="h-[98vh] rounded-t-3xl flex flex-col p-0"
+  >
+    <SheetHeader className="p-4 border-b">
+      <SheetTitle>Panier</SheetTitle>
+    </SheetHeader>
+
+    {/* IMPORTANT : On réutilise EXACTEMENT ton bloc panier */}
+    <div className="flex-1 overflow-hidden flex flex-col">
+       {/* Cart Header */}
+        <div className="p-4 border-b border-border flex items-center justify-between bg-card z-10">
+          <div className="flex items-center gap-2">
+            <ShoppingCart className="w-5 h-5 text-primary" />
+            <h2 className="font-semibold">Panier</h2>
+            {cart.length > 0 && (
+              <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full">
+                {cart.reduce((acc, item) => acc + item.quantity, 0)}
+              </span>
+            )}
+          </div>
+          {cart.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={clearCart} className="text-destructive h-8 px-2">
+              <Trash2 className="w-4 h-4 mr-1" /> Vider
+            </Button>
+          )}
+        </div>
+
+        {/* Scrollable Cart Items */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {cart.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-50">
+              <ShoppingCart className="w-16 h-16 mb-4 stroke-1" />
+              <p className="font-medium">Votre panier est vide</p>
+              <p className="text-sm">Ajoutez des produits pour commencer</p>
+            </div>
+          ) : (
+            cart.map((item) => (
+              <div key={item.product.id} className="flex flex-col p-3 bg-muted/30 rounded-xl border border-border/50">
+                <div className="flex justify-between items-start mb-2">
+                  <p className="font-medium text-sm line-clamp-2 pr-2">{item.product.name}</p>
+                  <p className="font-bold whitespace-nowrap">
+                    {(item.product.price * item.quantity).toFixed(0)} FDJ
+                  </p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    {item.product.price} × {item.quantity}
+                  </p>
+                  <div className="flex items-center gap-2 bg-background rounded-lg border border-border p-0.5 shadow-sm">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-md hover:bg-muted"
+                      onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)}
+                    >
+                      <Minus className="w-3 h-3" />
+                    </Button>
+                    <span className="w-8 text-center font-medium text-sm">{item.quantity}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-md hover:bg-muted"
+                      onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)}
+                      disabled={item.quantity >= item.product.quantity}
+                    >
+                      <Plus className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Sticky Cart Footer - Totals & Actions */}
+        {cart.length > 0 && (
+          <div className="bg-card border-t border-border p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
+            {/* Discount & Calculations */}
+            <div className="space-y-3 mb-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Total Brut</span>
+                <span>{totalBrut.toFixed(0)} FDJ</span>
+              </div>
+              {vatRate > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">TVA ({vatRate}%)</span>
+                  <span>{vatAmount.toFixed(0)} FDJ</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground flex items-center gap-1">remise (FDJ)</span>
+                <Input
+                  type="number"
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value)}
+                  className="h-7 w-24 text-right text-sm"
+                  placeholder="0"
+                />
+              </div>
+              <div className="flex justify-between items-center text-xl font-bold pt-2 border-t border-dashed">
+                <span>A Payer</span>
+                <span className="text-primary">{totalFinal.toFixed(0)} FDJ</span>
+              </div>
+
+              {/* Montant Donné Input */}
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-medium text-muted-foreground">Montant Reçu</label>
+                  <div className="flex gap-1">
+                    <QuickAmountButton value={Math.ceil(totalFinal / 500) * 500} />
+                    <QuickAmountButton value={Math.ceil(totalFinal / 1000) * 1000} />
+                    <QuickAmountButton value={totalFinal} />
+                  </div>
+                </div>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    value={amountGiven}
+                    onChange={(e) => setAmountGiven(e.target.value)}
+                    className={cn(
+                      "pl-8 font-bold text-lg",
+                      !isAmountValid && amountGiven ? "border-destructive focus-visible:ring-destructive" : ""
+                    )}
+                    placeholder="Montant donné par le client"
+                  />
+                  <Banknote className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                </div>
+                {amountGivenValue > 0 && (
+                  <div className="flex justify-between items-center mt-2 px-1">
+                    <span className="text-sm font-medium">Reste à rendre</span>
+                    <span className={cn(
+                      "font-bold text-lg",
+                      change > 0 ? "text-green-600" : "text-muted-foreground"
+                    )}>{change.toFixed(0)} FDJ</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Payment Methods Grid */}
+            <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+              {PAYMENT_METHODS.map((method) => (
+                <Button
+                  key={method.id}
+                  variant="outline"
+                  className={cn(
+                    "h-12 justify-start px-3 py-2 border-2",
+                    method.color,
+                    "border-transparent hover:border-current"
+                  )}
+                  onClick={() => handleInitiateSale(method.id)}
+                  disabled={!isAmountValid || isProcessing}
+                >
+                  <method.icon className="w-4 h-4 mr-2 shrink-0" />
+                  <span className="truncate text-xs font-semibold">{method.label}</span>
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+    </div>
+  </SheetContent>
+</Sheet>
       {showScanner && (
         <BarcodeScanner onScan={handleScan} onClose={() => setShowScanner(false)} />
       )}

@@ -96,7 +96,8 @@ export interface DbSaleItem {
   product_name_snapshot: string;
   product_price: number; // legacy
   price_snapshot: number;
-  product_cost: number;
+  unit_cost_snapshot: number;
+  product_cost: number; // legacy
   quantity: number;
   tva_snapshot: number;
   subtotal: number;
@@ -126,6 +127,7 @@ export interface DbSettings {
   id: string;
   user_id: string;
   vat_rate: number;
+  store_name: string;
   created_at: string;
   updated_at: string;
 }

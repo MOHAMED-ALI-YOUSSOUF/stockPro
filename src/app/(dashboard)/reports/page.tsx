@@ -1,4 +1,3 @@
-"use client";
 
 import Reports from "@/components/screens/Reports";
 

@@ -1,4 +1,3 @@
-"use client";
 
 import Settings from "@/components/screens/Settings";
 

@@ -1,3 +1,4 @@
+'use client'
 import { useRef } from 'react';
 import Barcode from 'react-barcode';
 import { Button } from '@/components/ui/button';

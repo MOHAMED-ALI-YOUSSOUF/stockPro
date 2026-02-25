@@ -11,15 +11,22 @@ import {
   insertMovement,
   fetchSales,
   insertSale,
+  fetchSettings,
+  updateSettings
 } from '@/lib/database';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import {
   isOnline,
   addToQueue,
   getQueue,
-  removeFromQueue,
   setOfflineData,
   getOfflineData,
 } from '@/lib/offlineSync';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface StoreState {
   products: Product[];
@@ -33,19 +40,26 @@ interface StoreState {
   setIsSyncing: (value: boolean) => void;
   lastSyncAt: number | null;
   userId: string | null;
+
+  // Store settings — toujours initialisées à des valeurs sûres
   vatRate: number;
+  storeName: string;
+  address: string;
+  phone: string;
+  categories: string[];
+  units: string[];
 
   // Init
   setUserId: (id: string | null) => void;
   loadData: () => Promise<void>;
 
   // Products
-  addProduct: (product: Omit<Product, 'id' | 'barcode' | 'createdAt' | 'updatedAt'>) => Promise<Product>;
+  addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Product>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   getProductByBarcode: (barcode: string) => Product | undefined;
 
-  // Stock movements
+  // Stock movements (mouvements manuels uniquement — pas pour les ventes)
   addMovement: (movement: Omit<StockMovement, 'id' | 'date'>) => Promise<void>;
 
   // Cart
@@ -57,6 +71,7 @@ interface StoreState {
 
   // Sales
   completeSale: (paymentMethod: string, discount?: number, amountGiven?: number) => Promise<Sale | null>;
+  getMonthlySales: () => { month: string; value: number }[];
 
   // Stats
   getLowStockProducts: () => Product[];
@@ -66,30 +81,31 @@ interface StoreState {
 
   // Settings
   updateVatRate: (rate: number) => Promise<void>;
+  updateStoreSettings: (settings: {
+    name: string;
+    rate: number;
+    address?: string;
+    phone?: string;
+    categories?: string[];
+    units?: string[];
+  }) => Promise<void>;
 }
 
-/**
- * Maps frontend payment methods to specific backend values
- * Allowed: 'cash', 'd-money', 'waafi', 'cac-pay', 'saba-pay', 'card'
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper
+// ─────────────────────────────────────────────────────────────────────────────
+
 function normalizePaymentMethod(method: string): 'cash' | 'd-money' | 'waafi' | 'cac-pay' | 'saba-pay' | 'card' {
   const normalized = method?.toLowerCase().trim() as any;
-
   const validMethods = ['cash', 'd-money', 'waafi', 'cac-pay', 'saba-pay', 'card'];
-
-  if (validMethods.includes(normalized)) {
-    return normalized;
-  }
-
-  // Legacy mapping compatibility
-  if (normalized === 'mobile_money' || normalized === 'mobile') {
-    return 'd-money'; // Default mobile to d-money if generic
-  }
-
-  // Default to cash if unknown
-  console.warn(`Unknown payment method: "${method}", defaulting to "cash"`);
+  if (validMethods.includes(normalized)) return normalized;
+  if (normalized === 'mobile_money' || normalized === 'mobile') return 'd-money';
   return 'cash';
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Store
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const useStore = create<StoreState>()(
   persist(
@@ -103,13 +119,22 @@ export const useStore = create<StoreState>()(
       pendingOps: 0,
       lastSyncAt: null,
       userId: null,
+
+      // Valeurs par défaut sûres — évite les crash sur .map() ou [0]
       vatRate: 0,
+      storeName: '',
+      address: '',
+      phone: '',
+      categories: [],
+      units: [],
 
       setPendingOps: (count) => set({ pendingOps: count }),
       setIsSyncing: (value) => set({ isSyncing: value }),
-
       setUserId: (id) => set({ userId: id }),
 
+      // ───────────────────────────────────────────────────────────────────────
+      // loadData — charge depuis Supabase (online) ou localStorage (offline)
+      // ───────────────────────────────────────────────────────────────────────
       loadData: async () => {
         set({ isLoading: true, pendingOps: getQueue().length });
         try {
@@ -120,49 +145,70 @@ export const useStore = create<StoreState>()(
               fetchSales(),
             ]);
 
-            // Try fetch settings if userId is present, otherwise default 0
             let vatRate = 0;
+            let storeName = '';
+            let address = '';
+            let phone = '';
+            let categories: string[] = [];
+            let units: string[] = [];
+
             const currentUserId = get().userId;
             if (currentUserId) {
               try {
-                const settings = await import('@/lib/database').then(m => m.fetchSettings(currentUserId));
-                vatRate = settings.vatRate;
+                const settings = await fetchSettings(currentUserId);
+                vatRate = settings.vatRate ?? 0;
+                storeName = settings.storeName ?? '';
+                address = settings.address ?? '';
+                phone = settings.phone ?? '';
+                categories = Array.isArray(settings.categories) ? settings.categories : [];
+                units = Array.isArray(settings.units) ? settings.units : [];
               } catch (e) {
-                console.error("Failed to fetch settings", e);
+                console.error('Failed to fetch settings', e);
               }
             }
 
-            set({ products, movements, sales, vatRate, lastSyncAt: Date.now() });
+            set({ products, movements, sales, vatRate, storeName, address, phone, categories, units, lastSyncAt: Date.now() });
 
-            // Cache for offline
             setOfflineData('products', products);
             setOfflineData('movements', movements);
             setOfflineData('sales', sales);
             setOfflineData('vatRate', vatRate);
+            setOfflineData('storeName', storeName);
+            setOfflineData('address', address);
+            setOfflineData('phone', phone);
+            setOfflineData('categories', categories);
+            setOfflineData('units', units);
           } else {
-            // Load from cache
             const products = getOfflineData<Product[]>('products') || [];
             const movements = getOfflineData<StockMovement[]>('movements') || [];
             const sales = getOfflineData<Sale[]>('sales') || [];
             const vatRate = getOfflineData<number>('vatRate') || 0;
-            set({ products, movements, sales, vatRate });
+            const storeName = getOfflineData<string>('storeName') || '';
+            const address = getOfflineData<string>('address') || '';
+            const phone = getOfflineData<string>('phone') || '';
+            const categories = Array.isArray(getOfflineData('categories')) ? getOfflineData<string[]>('categories')! : [];
+            const units = Array.isArray(getOfflineData('units')) ? getOfflineData<string[]>('units')! : [];
+            set({ products, movements, sales, vatRate, storeName, address, phone, categories, units });
           }
         } catch (error) {
           console.error('Failed to load data:', error);
-          // Fallback to cache
-          const products = getOfflineData<Product[]>('products') || [];
-          const movements = getOfflineData<StockMovement[]>('movements') || [];
-          const sales = getOfflineData<Sale[]>('sales') || [];
-          const vatRate = getOfflineData<number>('vatRate') || 0;
-          set({ products, movements, sales, vatRate });
         } finally {
           set({ isLoading: false });
         }
       },
 
+      // ───────────────────────────────────────────────────────────────────────
+      // Products
+      // ───────────────────────────────────────────────────────────────────────
+
       addProduct: async (productData) => {
         const userId = get().userId;
-        const barcode = generateBarcode();
+        const barcode = productData.barcode || generateBarcode();
+
+        if (productData.barcode && get().products.some(p => p.barcode === productData.barcode)) {
+          throw new Error(`Le code-barres ${productData.barcode} existe déjà.`);
+        }
+
         const tempProduct: Product = {
           ...productData,
           id: crypto.randomUUID(),
@@ -171,21 +217,18 @@ export const useStore = create<StoreState>()(
           updatedAt: new Date(),
         };
 
-        // Optimistic update
         set((state) => ({ products: [tempProduct, ...state.products] }));
         setOfflineData('products', get().products);
 
         if (isOnline() && userId) {
           try {
-            const dbProduct = await insertProduct({ ...productData, barcode }, userId);
-            // Replace temp with real
+            const dbProduct = await insertProduct({ ...productData, barcode } as any, userId);
             set((state) => ({
               products: state.products.map((p) => (p.id === tempProduct.id ? dbProduct : p)),
             }));
             setOfflineData('products', get().products);
             return dbProduct;
           } catch (error) {
-            console.error('Failed to insert product online:', error);
             addToQueue({ type: 'insert_product', payload: { ...productData, barcode } });
             return tempProduct;
           }
@@ -196,7 +239,6 @@ export const useStore = create<StoreState>()(
       },
 
       updateProduct: async (id, updates) => {
-        // Optimistic update
         set((state) => ({
           products: state.products.map((p) =>
             p.id === id ? { ...p, ...updates, updatedAt: new Date() } : p
@@ -208,7 +250,6 @@ export const useStore = create<StoreState>()(
           try {
             await updateProductDb(id, updates);
           } catch (error) {
-            console.error('Failed to update product online:', error);
             addToQueue({ type: 'update_product', payload: { id, updates } });
           }
         } else {
@@ -217,17 +258,13 @@ export const useStore = create<StoreState>()(
       },
 
       deleteProduct: async (id) => {
-        // Optimistic update
-        set((state) => ({
-          products: state.products.filter((p) => p.id !== id),
-        }));
+        set((state) => ({ products: state.products.filter((p) => p.id !== id) }));
         setOfflineData('products', get().products);
 
         if (isOnline()) {
           try {
             await deleteProductDb(id);
           } catch (error) {
-            console.error('Failed to delete product online:', error);
             addToQueue({ type: 'delete_product', payload: { id } });
           }
         } else {
@@ -239,15 +276,12 @@ export const useStore = create<StoreState>()(
         return get().products.find((p) => p.barcode === barcode);
       },
 
+      // ───────────────────────────────────────────────────────────────────────
+      // Stock movements (manuels — entrées / sorties uniquement)
+      // ───────────────────────────────────────────────────────────────────────
+
       addMovement: async (movementData) => {
         const userId = get().userId;
-
-        // Validation du payload
-        if (!movementData.productId || !movementData.productName || !movementData.type || !movementData.quantity) {
-          console.error("Invalid movement data:", movementData);
-          throw new Error("Movement data is incomplete");
-        }
-
         const normalizedPaymentMethod = movementData.paymentMethod
           ? normalizePaymentMethod(movementData.paymentMethod)
           : undefined;
@@ -255,6 +289,7 @@ export const useStore = create<StoreState>()(
         const sanitizedMovementData = {
           ...movementData,
           paymentMethod: normalizedPaymentMethod,
+          unitCost: get().products.find(p => p.id === movementData.productId)?.cost || 0
         };
 
         const tempMovement: StockMovement = {
@@ -263,23 +298,31 @@ export const useStore = create<StoreState>()(
           date: new Date(),
         };
 
-        const quantityChange = movementData.type === 'in'
-          ? movementData.quantity
-          : -movementData.quantity;
+        set((state) => {
+          return {
+            movements: [tempMovement, ...state.movements],
+            products: state.products.map((p) => {
+              if (p.id !== movementData.productId) return p;
 
-        // Optimistic update
-        set((state) => ({
-          movements: [tempMovement, ...state.movements],
-          products: state.products.map((p) =>
-            p.id === movementData.productId
-              ? { ...p, quantity: Math.max(0, p.quantity + quantityChange), updatedAt: new Date() }
-              : p
-          ),
-        }));
-        setOfflineData('products', get().products);
-        setOfflineData('movements', get().movements);
+              let newQuantity = p.quantity;
 
-        // Also update the product quantity in DB
+              if (movementData.type === 'in') {
+                newQuantity = p.quantity + movementData.quantity;
+              }
+
+              if (movementData.type === 'sale' || movementData.type === 'out') {
+                newQuantity = Math.max(0, p.quantity - movementData.quantity);
+              }
+
+              return {
+                ...p,
+                quantity: newQuantity,
+                updatedAt: new Date(),
+              };
+            }),
+          };
+        });
+
         const product = get().products.find((p) => p.id === movementData.productId);
         if (product) {
           if (isOnline() && userId) {
@@ -287,7 +330,6 @@ export const useStore = create<StoreState>()(
               await insertMovement(sanitizedMovementData, userId);
               await updateProductDb(movementData.productId, { quantity: product.quantity });
             } catch (error) {
-              console.error('Failed to insert movement online:', error);
               addToQueue({ type: 'insert_movement', payload: sanitizedMovementData });
               addToQueue({ type: 'update_product', payload: { id: movementData.productId, updates: { quantity: product.quantity } } });
             }
@@ -297,6 +339,10 @@ export const useStore = create<StoreState>()(
           }
         }
       },
+
+      // ───────────────────────────────────────────────────────────────────────
+      // Cart
+      // ───────────────────────────────────────────────────────────────────────
 
       addToCart: (product, quantity = 1) => {
         set((state) => {
@@ -310,14 +356,12 @@ export const useStore = create<StoreState>()(
               ),
             };
           }
-          return { cart: [...state.cart, { product, quantity }] };
+          return { cart: [...state.cart, { product, quantity, unitCost: product.cost }] };
         });
       },
 
       removeFromCart: (productId) => {
-        set((state) => ({
-          cart: state.cart.filter((item) => item.product.id !== productId),
-        }));
+        set((state) => ({ cart: state.cart.filter((item) => item.product.id !== productId) }));
       },
 
       updateCartQuantity: (productId, quantity) => {
@@ -333,18 +377,16 @@ export const useStore = create<StoreState>()(
       },
 
       clearCart: () => set({ cart: [] }),
+      getCartTotal: () => get().cart.reduce((total, item) => total + item.product.price * item.quantity, 0),
 
-      getCartTotal: () => {
-        return get().cart.reduce((total, item) => total + item.product.price * item.quantity, 0);
-      },
+      // ───────────────────────────────────────────────────────────────────────
+      // Sales
+      // ───────────────────────────────────────────────────────────────────────
 
       completeSale: async (paymentMethod, discount = 0, amountGiven = 0) => {
         const state = get();
         const userId = state.userId;
-        if (state.cart.length === 0) {
-          console.error("Cannot complete sale: cart is empty");
-          return null;
-        }
+        if (state.cart.length === 0) return null;
 
         const cartItems = [...state.cart];
         const totalBrut = state.getCartTotal();
@@ -353,14 +395,10 @@ export const useStore = create<StoreState>()(
         const totalAfterVat = totalBrut + vatTotal;
         const totalFinal = Math.max(0, totalAfterVat - discount);
         const change = Math.max(0, amountGiven - totalFinal);
-
-        // Normalize payment method
         const normalizedPaymentMethod = normalizePaymentMethod(paymentMethod);
 
-        console.log("Completing sale with payment method:", paymentMethod, "→", normalizedPaymentMethod);
-
         const saleData = {
-          items: cartItems,
+          items: cartItems.map(item => ({ ...item, unitCost: item.product.cost })),
           totalBrut,
           vatRate,
           vatTotal,
@@ -369,129 +407,188 @@ export const useStore = create<StoreState>()(
           amountGiven,
           change,
           paymentMethod: normalizedPaymentMethod,
+          storeName: state.storeName,
         };
 
         const tempSaleId = crypto.randomUUID();
-
         const tempSale: Sale = {
+          ...saleData,
           id: tempSaleId,
-          items: cartItems,
           total: totalFinal,
-          totalBrut,
-          vatRate,
-          vatTotal,
-          discount,
-          totalFinal,
-          amountGiven,
-          change,
           date: new Date(),
-          paymentMethod: normalizedPaymentMethod,
           userId: userId || undefined,
         };
 
-        // Optimistic: add sale, clear cart
-        set((state) => ({ sales: [tempSale, ...(state.sales || [])], cart: [] }));
-        setOfflineData('sales', get().sales);
+        // ─────────────────────────────────────────────────────────────────────
+        // MISE À JOUR LOCALE UNIQUEMENT — sans appel DB ici.
+        //
+        // CORRECTION BUG DOUBLE INSERT :
+        // La fonction Supabase `create_sale` (appelée dans insertSale) insère
+        // DÉJÀ les stock_movements côté serveur dans sa transaction SQL.
+        // Si on appelait addMovement() → insertMovement() ici en plus, chaque
+        // mouvement serait inséré 2× en base.
+        //
+        // Solution : mise à jour directe de Zustand (UI instantanée),
+        // DB exclusivement déléguée à insertSale → create_sale RPC.
+        // ─────────────────────────────────────────────────────────────────────
+        const now = new Date();
 
-        // Add movements for each item APRÈS avoir créé la vente
-        // Cela évite que les mouvements soient créés sans vente valide
-        try {
-          for (const item of cartItems) {
-            const movementData = {
-              productId: item.product.id,
-              productName: item.product.name,
-              type: 'sale' as const,
-              quantity: item.quantity,
-              note: `Vente #${tempSaleId.slice(-6)}`,
-              paymentMethod: normalizedPaymentMethod,
+        // Crée les mouvements temporaires pour l'affichage local
+        const tempMovements: StockMovement[] = cartItems.map(item => ({
+          id: crypto.randomUUID(),
+          productId: item.product.id,
+          productName: item.product.name,
+          type: 'sale' as const,
+          quantity: item.quantity,
+          date: now,
+          note: `Vente #${tempSaleId.slice(-6)}`,
+          paymentMethod: normalizedPaymentMethod,
+          unitCost: item.product.cost,
+        }));
+
+        // Un seul set() atomique : panier vidé, vente + mouvements ajoutés, stocks décrémentés
+        set((prevState) => ({
+          cart: [],
+          sales: [tempSale, ...(prevState.sales || [])],
+          movements: [...tempMovements, ...prevState.movements],
+          products: prevState.products.map((p) => {
+            const soldItem = cartItems.find(i => i.product.id === p.id);
+            if (!soldItem) return p;
+            return {
+              ...p,
+              quantity: Math.max(0, p.quantity - soldItem.quantity),
+              updatedAt: now,
             };
+          }),
+        }));
 
-            // Valider les données avant d'appeler addMovement
-            if (!movementData.productId || !movementData.productName || !movementData.quantity) {
-              console.error("Invalid movement data for item:", item, movementData);
-              continue;
-            }
+        // Persiste l'état local pour le mode offline
+        setOfflineData('sales', get().sales);
+        setOfflineData('movements', get().movements);
+        setOfflineData('products', get().products);
 
-            await state.addMovement(movementData);
-          }
-        } catch (error) {
-          console.error("Error adding movements for sale:", error);
-        }
-
-        // Enregistrer la vente
+        // ─────────────────────────────────────────────────────────────────────
+        // DB — insertSale → create_sale RPC gère TOUT (sale + movements + stock)
+        // On ne queue PAS insert_movement : create_sale s'en charge.
+        // ─────────────────────────────────────────────────────────────────────
         if (isOnline() && userId) {
           try {
             const insertedSale = await insertSale(saleData, userId);
-            // Mettre à jour avec la vente réelle
-            set((state) => ({
-              sales: state.sales.map((s) => (s.id === tempSale.id ? insertedSale : s)),
+            // Remplace la vente temp par la vente confirmée (vrai ID Supabase)
+            set((prevState) => ({
+              sales: prevState.sales.map((s) => (s.id === tempSale.id ? insertedSale : s)),
             }));
             setOfflineData('sales', get().sales);
             return insertedSale;
           } catch (error) {
-            console.error('Failed to insert sale online:', error);
-            addToQueue({
-              type: 'insert_sale',
-              payload: saleData,
-            });
+            console.error('[completeSale] insertSale failed, queuing:', error);
+            // Mode dégradé : queue insert_sale uniquement
+            // create_sale créera les mouvements lors du replay
+            addToQueue({ type: 'insert_sale', payload: saleData });
             return tempSale;
           }
         } else {
-          addToQueue({
-            type: 'insert_sale',
-            payload: saleData,
-          });
+          // Offline : queue insert_sale uniquement (pas insert_movement)
+          addToQueue({ type: 'insert_sale', payload: saleData });
           return tempSale;
         }
       },
 
-      updateVatRate: async (rate: number) => {
-        set({ vatRate: rate });
+      getMonthlySales: () => {
+        const sales = get().sales || [];
+        const months = Array.from({ length: 6 }, (_, i) => {
+          const d = new Date();
+          d.setMonth(d.getMonth() - (5 - i));
+          return format(d, 'MMM', { locale: fr });
+        });
+
+        return months.map(month => {
+          const monthSales = sales.filter(s => {
+            const d = new Date(s.date);
+            return format(d, 'MMM', { locale: fr }) === month && d.getFullYear() === new Date().getFullYear();
+          });
+          const total = monthSales.reduce((acc, s) => acc + (s.totalFinal || s.total), 0);
+          return { month, value: total };
+        });
+      },
+
+      // ───────────────────────────────────────────────────────────────────────
+      // Settings
+      // ───────────────────────────────────────────────────────────────────────
+
+      updateVatRate: async (rate) => {
+        const current = get();
+        await current.updateStoreSettings({ name: current.storeName, rate });
+      },
+
+      updateStoreSettings: async ({ name, rate, address, phone, categories, units }) => {
+        const current = get();
+        const newAddress = address !== undefined ? address : current.address;
+        const newPhone = phone !== undefined ? phone : current.phone;
+        const newCategories = Array.isArray(categories) ? categories : current.categories;
+        const newUnits = Array.isArray(units) ? units : current.units;
+
+        // Optimistic update
+        set({
+          storeName: name,
+          vatRate: rate,
+          address: newAddress,
+          phone: newPhone,
+          categories: newCategories,
+          units: newUnits,
+        });
+
+        // Persiste offline
+        setOfflineData('storeName', name);
         setOfflineData('vatRate', rate);
+        setOfflineData('address', newAddress);
+        setOfflineData('phone', newPhone);
+        setOfflineData('categories', newCategories);
+        setOfflineData('units', newUnits);
+
         const userId = get().userId;
+        const settingsPayload = {
+          storeName: name,
+          vatRate: rate,
+          address: newAddress,
+          phone: newPhone,
+          categories: newCategories,
+          units: newUnits,
+        };
+
         if (isOnline() && userId) {
           try {
-            const { updateSettings } = await import('@/lib/database');
-            await updateSettings(userId, rate);
+            await updateSettings(userId, settingsPayload);
           } catch (error) {
-            console.error('Failed to update settings online:', error);
-            addToQueue({ type: 'update_settings', payload: { rate } });
+            addToQueue({ type: 'update_settings', payload: settingsPayload });
           }
         } else {
-          addToQueue({ type: 'update_settings', payload: { rate } });
+          addToQueue({ type: 'update_settings', payload: settingsPayload });
         }
       },
 
-      getLowStockProducts: () => {
-        const products = get().products || [];
-        return products.filter((p) => p.quantity <= p.minStock);
-      },
+      // ───────────────────────────────────────────────────────────────────────
+      // Stats
+      // ───────────────────────────────────────────────────────────────────────
 
-      getTotalInventoryValue: () => {
-        const products = get().products || [];
-        return products.reduce((total, p) => total + p.cost * p.quantity, 0);
-      },
+      getLowStockProducts: () => (get().products || []).filter((p) => p.quantity <= p.minStock),
+
+      getTotalInventoryValue: () =>
+        (get().products || []).reduce((total, p) => total + p.price * p.quantity, 0),
 
       getTodaySales: () => {
-        const sales = get().sales || [];
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        return sales
+        return (get().sales || [])
           .filter((s) => new Date(s.date) >= today)
-          .reduce((total, s) => total + (s.totalFinal || s.total), 0);
+          .reduce((acc, s) => acc + (s.totalFinal || s.total), 0);
       },
 
-      getRecentMovements: (limit = 10) => {
-        const movements = get().movements || [];
-        return movements.slice(0, limit);
-      },
+      getRecentMovements: (limit = 10) => (get().movements || []).slice(0, limit),
     }),
     {
       name: 'stockpro-store',
-      partialize: (state) => ({
-        cart: state.cart,
-        // Don't persist products/movements/sales - they come from Supabase or offline cache
-      }),
+      partialize: (state) => ({ cart: state.cart }),
     }
   )
 );

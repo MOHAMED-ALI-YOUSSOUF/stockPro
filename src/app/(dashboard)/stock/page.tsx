@@ -1,4 +1,3 @@
-"use client";
 
 import Stock from "@/components/screens/Stock";
 

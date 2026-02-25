@@ -1,4 +1,3 @@
-"use client";
 
 import Dashboard from "@/components/screens/Dashboard";
 

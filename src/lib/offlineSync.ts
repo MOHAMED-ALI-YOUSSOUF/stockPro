@@ -352,7 +352,9 @@ export async function processQueue() {
         case 'update_settings': {
           try {
             const { updateSettings } = await import('./database');
-            await updateSettings(userId, op.payload.rate);
+            // Passe le payload complet (storeName, vatRate, address, phone, categories, units)
+            // au lieu de l'ancienne signature (rate, store_name) -- aligné avec useStore v2
+            await updateSettings(userId, op.payload);
           } catch (err: any) {
             console.error("update_settings failed:", err);
             throw err;

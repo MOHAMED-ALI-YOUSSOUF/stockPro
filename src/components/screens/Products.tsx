@@ -1,3 +1,4 @@
+'use client'
 import { useState } from 'react';
 import { useStore } from '@/store/useStore';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
@@ -57,11 +69,7 @@ const Products = () => {
     setEditingProduct(null);
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Êtes-vous sûr de vouloir supprimer ce produit ?')) {
-      await deleteProduct(id);
-    }
-  };
+  
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -152,13 +160,40 @@ const Products = () => {
                       <Printer className="w-4 h-4 mr-2" />
                       Imprimer étiquette
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => handleDelete(product.id)}
-                      className="text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Supprimer
-                    </DropdownMenuItem>
+                    <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <DropdownMenuItem
+                        onSelect={(e) => e.preventDefault()}
+                        className="text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Supprimer
+                      </DropdownMenuItem>
+                    </AlertDialogTrigger>
+
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          Supprimer le produit ?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Cette action est irréversible. Le produit
+                          <span className="font-semibold"> {product.name} </span>
+                          sera définitivement supprimé.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => deleteProduct(product.id)}
+                          className="bg-destructive text-white hover:bg-destructive/90"
+                        >
+                          Supprimer définitivement
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -168,8 +203,8 @@ const Products = () => {
 
               <div className="flex items-end justify-between">
                 <div>
-                  <p className="text-2xl font-bold text-primary">€{product.price.toFixed(2)}</p>
-                  <p className="text-xs text-muted-foreground">Coût: €{product.cost.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-primary">{product.price.toFixed(0)} FDJ</p>
+                  <p className="text-xs text-muted-foreground">Coût: {product.cost.toFixed(0)} FDJ</p>
                 </div>
                 <div className="text-right">
                   <p

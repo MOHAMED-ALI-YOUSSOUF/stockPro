@@ -21,12 +21,14 @@ export interface StockMovement {
   date: Date;
   note?: string;
   paymentMethod?: 'cash' | 'd-money' | 'waafi' | 'cac-pay' | 'saba-pay' | 'card';
+  unitCost?: number; // Snapshot of cost at time of movement
 }
 
 export interface CartItem {
   product: Product;
   quantity: number;
   subtotal?: number; // Calculated field
+  unitCost: number; // Snapshot of cost at time of sale
 }
 
 export interface Sale {
@@ -43,12 +45,14 @@ export interface Sale {
   date: Date;
   paymentMethod: 'cash' | 'd-money' | 'waafi' | 'cac-pay' | 'saba-pay' | 'card'; // Make this strict
   userId?: string;
+  storeName?: string;
 }
 
 export interface Settings {
   id: string;
   userId: string;
   vatRate: number;
+  storeName: string;
 }
 
 export const categories = [

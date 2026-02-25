@@ -1,5 +1,11 @@
 import { supabase } from './supabase';
-import type { Product, StockMovement, Sale, CartItem } from '@/types/models';
+import type {
+  DbProductInsert,
+  DbSaleItem,
+  DbSettings,
+  DbSettingsInsert,
+} from '@/types/database';
+import type { Product, StockMovement, Sale, CartItem, Settings } from '@/types/models';
 
 // ============= PRODUCTS =============
 
@@ -15,27 +21,34 @@ export async function fetchProducts(): Promise<Product[]> {
   return (data || []).map(mapDbProduct);
 }
 
-export async function insertProduct(product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>, userId: string): Promise<Product> {
+export async function insertProduct(
+  product: DbProductInsert,
+  userId: string
+): Promise<Product> {
+
+  const payload = {
+    name: product.name,
+    barcode: product.barcode,
+    category: product.category,
+    price: product.price,
+    cost: product.cost,
+    quantity: product.quantity,
+    min_stock: product.min_stock, // ✅ conversion ici
+    unit: product.unit,
+    user_id: userId,
+  };
+
   const { data, error } = await supabase
     .from('products')
-    .insert({
-      user_id: userId,
-      name: product.name,
-      barcode: product.barcode,
-      category: product.category,
-      price: product.price,
-      cost: product.cost,
-      quantity: product.quantity,
-      min_stock: product.minStock,
-      unit: product.unit,
-    } as any)
+    .insert(payload)
     .select()
     .single();
 
   if (error) {
-    console.error("Supabase insertProduct error:", error);
+    console.error("Supabase insertProduct FULL error:", JSON.stringify(error, null, 2));
     throw error;
   }
+
   return mapDbProduct(data!);
 }
 
@@ -85,38 +98,6 @@ export async function insertMovement(
   movement: Omit<StockMovement, 'id' | 'date'>,
   userId: string
 ): Promise<StockMovement> {
-  // Validation des données avant insertion
-  if (!movement.productId || typeof movement.productId !== 'string') {
-    const error = new Error('Invalid movement: productId is required and must be a string');
-    console.error("Movement validation error:", error, movement);
-    throw error;
-  }
-
-  if (!movement.productName || typeof movement.productName !== 'string') {
-    const error = new Error('Invalid movement: productName is required and must be a string');
-    console.error("Movement validation error:", error, movement);
-    throw error;
-  }
-
-  if (!['in', 'out', 'sale'].includes(movement.type)) {
-    const error = new Error(`Invalid movement: type must be 'in', 'out', or 'sale', got ${movement.type}`);
-    console.error("Movement validation error:", error, movement);
-    throw error;
-  }
-
-  if (typeof movement.quantity !== 'number' || movement.quantity <= 0) {
-    const error = new Error(`Invalid movement: quantity must be a positive number, got ${movement.quantity}`);
-    console.error("Movement validation error:", error, movement);
-    throw error;
-  }
-
-  if (!userId || typeof userId !== 'string') {
-    const error = new Error('Invalid movement: userId is required and must be a string');
-    console.error("Movement validation error:", error, movement);
-    throw error;
-  }
-
-  // Préparer le payload pour Supabase
   let payload: any = {
     user_id: userId,
     product_id: movement.productId,
@@ -125,21 +106,9 @@ export async function insertMovement(
     quantity: movement.quantity,
     note: movement.note || null,
     payment_method: (movement as any).paymentMethod || null,
+    unit_cost: (movement as any).unitCost || null,
   };
 
-  // Valider payment_method si présent
-  if (payload.payment_method) {
-    const validMethods = ['cash', 'd-money', 'waafi', 'cac-pay', 'saba-pay', 'card'];
-    if (!validMethods.includes(payload.payment_method)) {
-      const error = new Error(`Invalid payment_method: ${payload.payment_method}. Must be one of: ${validMethods.join(', ')}`);
-      console.error("Movement validation error:", error, movement);
-      throw error;
-    }
-  }
-
-  console.log("Inserting movement with validated payload:", payload);
-
-  // Tentative d'insertion
   const { data, error } = await supabase
     .from('stock_movements')
     .insert(payload)
@@ -147,10 +116,11 @@ export async function insertMovement(
     .single();
 
   if (error) {
-    // Si la colonne payment_method n'existe pas (erreur 42703 ou PGRST204), réessayer sans
-    if ((error.code === '42703' || error.code === 'PGRST204') && error.message?.includes('payment_method')) {
-      console.warn("Database missing 'payment_method' column in 'stock_movements', retrying without it...");
-      delete payload.payment_method;
+    // Graceful fallback for missing columns during migration
+    if (error.code === '42703' || error.code === 'PGRST204') {
+      console.warn("Database missing columns in 'stock_movements', retrying without them...");
+      if (error.message?.includes('payment_method')) delete payload.payment_method;
+      if (error.message?.includes('unit_cost')) delete payload.unit_cost;
 
       const { data: retryData, error: retryError } = await supabase
         .from('stock_movements')
@@ -158,30 +128,9 @@ export async function insertMovement(
         .select()
         .single();
 
-      if (retryError) {
-        console.error("Supabase insertMovement retry error:", {
-          error: retryError,
-          code: retryError.code,
-          message: retryError.message,
-          details: retryError.details,
-          hint: retryError.hint,
-          payload: payload,
-        });
-        throw retryError;
-      }
-
+      if (retryError) throw retryError;
       return mapDbMovement(retryData!);
     }
-
-    // Pour toute autre erreur, logger et throw
-    console.error("Supabase insertMovement error (stringified):", JSON.stringify(error, null, 2));
-    console.error("Supabase insertMovement error details:", {
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-      payload: payload,
-    });
     throw error;
   }
 
@@ -196,10 +145,7 @@ export async function fetchSales(): Promise<Sale[]> {
     .select('*')
     .order('created_at', { ascending: false });
 
-  if (salesError) {
-    console.error("Supabase fetchSales error:", salesError);
-    throw salesError;
-  }
+  if (salesError) throw salesError;
 
   const saleIds = (salesData || []).map((s: any) => s.id);
   if (saleIds.length === 0) return [];
@@ -209,10 +155,7 @@ export async function fetchSales(): Promise<Sale[]> {
     .select('*')
     .in('sale_id', saleIds);
 
-  if (itemsError) {
-    console.error("Supabase fetchSaleItems error:", itemsError);
-    throw itemsError;
-  }
+  if (itemsError) throw itemsError;
 
   return (salesData || []).map((sale: any) => {
     const items = (itemsData || [])
@@ -220,11 +163,11 @@ export async function fetchSales(): Promise<Sale[]> {
       .map((item: any) => ({
         product: {
           id: item.product_id,
-          name: item.product_name,
+          name: item.product_name_snapshot || item.product_name || 'Produit inconnu',
           barcode: '',
           category: '',
-          price: item.product_price,
-          cost: item.product_cost,
+          price: item.price_snapshot || item.product_price || 0,
+          cost: item.unit_cost_snapshot || item.product_cost || 0,
           quantity: 0,
           minStock: 0,
           unit: '',
@@ -232,27 +175,29 @@ export async function fetchSales(): Promise<Sale[]> {
           updatedAt: new Date(),
         },
         quantity: item.quantity,
+        unitCost: item.unit_cost_snapshot || item.product_cost || 0,
       }));
     return {
       id: sale.id,
       items,
-      total: sale.total_final || sale.total,
-      totalBrut: sale.total_brut || sale.total,
+      total: sale.total_final || sale.total || 0,
+      totalBrut: sale.total_brut || sale.total || 0,
       vatRate: sale.vat_rate_snapshot || 0,
       vatTotal: sale.tva_total || 0,
       discount: sale.remise || 0,
-      totalFinal: sale.total_final || sale.total,
+      totalFinal: sale.total_final || sale.total || 0,
       amountGiven: sale.montant_donne || 0,
       change: sale.reste || 0,
       date: new Date(sale.created_at),
       paymentMethod: sale.payment_method as any,
       userId: sale.user_id,
+      storeName: sale.store_name || '',
     };
   });
 }
 
 export async function insertSale(
-  saleData: {
+  sale: {
     items: CartItem[];
     totalBrut: number;
     vatRate: number;
@@ -262,138 +207,100 @@ export async function insertSale(
     amountGiven: number;
     change: number;
     paymentMethod: 'cash' | 'd-money' | 'waafi' | 'cac-pay' | 'saba-pay' | 'card';
+    storeName?: string;
   },
   userId: string
 ): Promise<Sale> {
-  const {
-    items,
-    totalBrut,
-    vatRate,
-    vatTotal,
-    discount,
-    totalFinal,
-    amountGiven,
-    change,
-    paymentMethod,
-  } = saleData;
-
-  // Validation des données
-  if (!items || items.length === 0) {
-    const error = new Error('Invalid sale: items array is empty');
-    console.error("Sale validation error:", error, saleData);
-    throw error;
-  }
-
-  if (!userId) {
-    const error = new Error('Invalid sale: userId is required');
-    console.error("Sale validation error:", error, saleData);
-    throw error;
-  }
-
-  const validMethods = ['cash', 'd-money', 'waafi', 'cac-pay', 'saba-pay', 'card'];
-  if (!validMethods.includes(paymentMethod)) {
-    const error = new Error(`Invalid sale: payment_method must be one of: ${validMethods.join(', ')}, got ${paymentMethod}`);
-    console.error("Sale validation error:", error, saleData);
-    throw error;
-  }
-
   const rpcParams = {
-    p_items: items.map((item) => ({
+    p_items: sale.items.map((item) => ({
       product_id: item.product.id,
       quantity: item.quantity,
       price: item.product.price,
       name: item.product.name,
+      unit_cost: item.unitCost || item.product.cost || 0,
     })),
-    p_total_brut: totalBrut,
-    p_vat_rate: vatRate,
-    p_tva_total: vatTotal,
-    p_remise: discount,
-    p_total_final: totalFinal,
-    p_montant_donne: amountGiven,
-    p_reste: change,
-    p_payment_method: paymentMethod,
+    p_total_brut: sale.totalBrut,
+    p_vat_rate: sale.vatRate,
+    p_tva_total: sale.vatTotal,
+    p_remise: sale.discount,
+    p_total_final: sale.totalFinal,
+    p_montant_donne: sale.amountGiven,
+    p_reste: sale.change,
+    p_payment_method: sale.paymentMethod,
+    p_store_name: sale.storeName || '',
     p_user_id: userId,
   };
-
-  console.log("Calling create_sale RPC with params:", rpcParams);
 
   const { data, error } = await supabase.rpc('create_sale', rpcParams);
 
   if (error) {
-    console.error("Supabase insertSale (RPC) error (stringified):", JSON.stringify(error, null, 2));
-    console.error("Supabase insertSale (RPC) error details:", JSON.stringify({
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-      rpcParams,
-    }, null, 2));
+    console.error("RPC create_sale error:", error);
     throw error;
   }
 
-  // Since RPC returns just ID, we construct the Sale object to return
   const saleId = (data as any).id;
 
   return {
     id: saleId,
-    items,
-    total: totalFinal,
-    totalBrut,
-    vatRate,
-    vatTotal,
-    discount,
-    totalFinal,
-    amountGiven,
-    change,
+    items: sale.items,
+    total: sale.totalFinal,
+    totalBrut: sale.totalBrut,
+    vatRate: sale.vatRate,
+    vatTotal: sale.vatTotal,
+    discount: sale.discount,
+    totalFinal: sale.totalFinal,
+    amountGiven: sale.amountGiven,
+    change: sale.change,
     date: new Date(),
-    paymentMethod: paymentMethod,
+    paymentMethod: sale.paymentMethod,
     userId,
+    storeName: sale.storeName || '',
   };
 }
 
 // ============= SETTINGS =============
 
-export async function fetchSettings(userId: string): Promise<{ vatRate: number }> {
+export async function fetchSettings(userId: string) {
   const { data, error } = await supabase
-    .from('settings')
-    .select('*')
-    .eq('user_id', userId)
+    .from("settings")
+    .select("*")
+    .eq("user_id", userId)
     .single();
 
-  if (error && error.code !== 'PGRST116') {
-    console.error("Supabase fetchSettings error:", error);
-    throw error;
-  }
+  if (error && error.code !== "PGRST116") throw error;
 
-  if (!data) {
-    // Create default settings if not exists
-    const { data: newData, error: newError } = await supabase
-      .from('settings')
-      .insert({ user_id: userId, vat_rate: 0 } as any)
-      .select()
-      .single();
-
-    if (newError) {
-      console.error("Supabase createSettings error:", newError);
-      throw newError;
-    }
-    return { vatRate: newData.vat_rate };
-  }
-
-  return { vatRate: data.vat_rate };
+  return {
+    storeName: data?.store_name || "",
+    address: data?.address || "",
+    phone: data?.phone || "",
+    vatRate: data?.vat_rate || 0,
+    categories: data?.categories || [],
+    units: data?.units || [],
+  };
 }
 
-export async function updateSettings(userId: string, vatRate: number): Promise<void> {
+export async function updateSettings(
+  userId: string,
+  settings: any
+) {
   const { error } = await supabase
-    .from('settings')
-    .upsert({ user_id: userId, vat_rate: vatRate } as any, { onConflict: 'user_id' });
+    .from("settings")
+    .upsert(
+      {
+        user_id: userId,
+        store_name: settings.storeName,
+        address: settings.address,
+        phone: settings.phone,
+        vat_rate: settings.vatRate,
+        categories: settings.categories,
+        units: settings.units,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" }
+    );
 
-  if (error) {
-    console.error("Supabase updateSettings error:", error);
-    throw error;
-  }
+  if (error) throw error;
 }
-
 // ============= MAPPERS =============
 
 function mapDbProduct(row: any): Product {
@@ -422,5 +329,6 @@ function mapDbMovement(row: any): StockMovement {
     date: new Date(row.created_at),
     note: row.note || undefined,
     paymentMethod: row.payment_method || undefined,
+    unitCost: row.unit_cost || undefined,
   };
 }
