@@ -1,11 +1,13 @@
 {
-    "name": "StockPro - Gestion de Stock",
+    "name": "StockPro - Gestion d'Inventaire",
     "short_name": "StockPro",
-    "description": "Système de vente et gestion de stock professionnel",
+    "description": "Système professionnel de gestion de stock et point de vente avec mode hors-ligne.",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#ffffff",
-    "theme_color": "#6366f1",
+    "theme_color": "#10B981",
+    "scope": "/",
+    "orientation": "portrait",
     "icons": [
         {
             "src": "/icons/icon-192x192.png",

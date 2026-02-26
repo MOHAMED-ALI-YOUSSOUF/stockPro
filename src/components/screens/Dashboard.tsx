@@ -93,32 +93,32 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-foreground">
+        <h1 className="text-2xl font-bold text-foreground">
           {storeName || "Tableau de bord"}
         </h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-muted-foreground mt-1 text-sm">
           {storeName ? "Tableau de bord - Vue d'ensemble" : "Vue d'ensemble de votre inventaire"}
         </p>
       </div>
 
-      {/* KPI GRID COMPACT */}
-      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* KPI GRID */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {stats.map((stat) => (
           <Card
             key={stat.label}
             className="border bg-card shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
           >
-            <CardContent className="p-4 lg:p-8">
+            <CardContent className="p-4 lg:p-5">
               <div className="flex items-center gap-3">
                 <div className={cn("p-2 rounded-lg", stat.bg)}>
-                  <stat.icon className={cn("h-4 lg:h-10 lg:w-10 w-4", stat.color)} />
+                  <stat.icon className={cn("h-4 w-4 lg:h-5 lg:w-5", stat.color)} />
                 </div>
 
                 <div>
-                  <p className="text-xs lg:text- uppercase tracking-wide text-muted-foreground">
+                  <p className="text-[11px] lg:text-xs uppercase tracking-wide text-muted-foreground">
                     {stat.label}
                   </p>
-                  <p className="text-2xs lg:text-2xl font-semibold leading-tight">
+                  <p className="text-sm lg:text-base font-semibold leading-tight">
                     {stat.value}
                   </p>
                 </div>
@@ -132,8 +132,8 @@ export default function Dashboard() {
       {lowStockProducts.length > 0 && (
         <Card className="border-orange-200 bg-orange-50/40 shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm lg:text-lg flex items-center gap-2 text-orange-600">
-              <AlertTriangle className="h-4 w-4 lg:h-10 lg:w-10" />
+            <CardTitle className="text-sm flex items-center gap-2 text-orange-600">
+              <AlertTriangle className="h-4 w-4" />
               Stock Bas ({lowStockProducts.length})
             </CardTitle>
           </CardHeader>
@@ -142,12 +142,12 @@ export default function Dashboard() {
             {lowStockProducts.slice(0, 5).map((product) => (
               <div
                 key={product.id}
-                className="flex justify-between items-center text-sm lg:text-lg"
+                className="flex justify-between items-center text-sm"
               >
                 <span className="truncate flex-1 text-foreground">
                   {product.name}
                 </span>
-                <span className="text-destructive font-medium ml-2 text-xs lg:text-lg">
+                <span className="text-destructive font-medium ml-2 text-xs">
                   {product.quantity} / {product.minStock}
                 </span>
               </div>
@@ -159,12 +159,12 @@ export default function Dashboard() {
       {/* MONTHLY REVENUE CHART */}
       <Card className="shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm lg:text-xl flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-primary lg:h-10 lg:w-10" />
+          <CardTitle className="text-sm lg:text-base flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-primary" />
             Ventes Mensuelles (HT)
           </CardTitle>
         </CardHeader>
-        <CardContent className="h-[300px] lg:h-[400px] pt-4">
+        <CardContent className="h-[260px] lg:h-[320px] pt-4">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={monthlySales}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
@@ -201,44 +201,44 @@ export default function Dashboard() {
       {/* RECENT MOVEMENTS */}
       <Card className="shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm lg:text-xl flex items-center gap-2">
-            <Clock className="h-4 w-4 text-primary lg:h-10 lg:w-10" />
+          <CardTitle className="text-sm lg:text-base flex items-center gap-2">
+            <Clock className="h-4 w-4 text-primary" />
             Mouvements récents
           </CardTitle>
         </CardHeader>
 
         <CardContent className="space-y-3">
           {recentMovements.length === 0 ? (
-            <p className="text-xs lg:text-lg text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Aucun mouvement récent
             </p>
           ) : (
             recentMovements.map((movement) => (
               <div
                 key={movement.id}
-                className="flex items-center justify-between text-sm lg:text-lg"
+                className="flex items-center justify-between text-sm"
               >
                 <div className="flex items-center gap-3">
                   <div
                     className={cn(
-                      "w-7 h-7 lg:w-10 lg:h-10 rounded-md flex items-center justify-center",
+                      "w-7 h-7 rounded-md flex items-center justify-center",
                       movement.type === "in"
                         ? "bg-green-500/10"
                         : "bg-red-500/10"
                     )}
                   >
                     {movement.type === "in" ? (
-                      <ArrowDownRight className="h-4 w-4 lg:h-10 lg:w-10 text-green-500" />
+                      <ArrowDownRight className="h-3.5 w-3.5 text-green-500" />
                     ) : (
-                      <ArrowUpRight className="h-4 w-4 lg:h-10 lg:w-10 text-red-500" />
+                      <ArrowUpRight className="h-3.5 w-3.5 text-red-500" />
                     )}
                   </div>
 
                   <div>
-                    <p className="text-sm lg:text-lg font-medium leading-tight">
+                    <p className="text-sm font-medium leading-tight">
                       {movement.productName}
                     </p>
-                    <p className="text-[10px] lg:text-lg text-muted-foreground">
+                    <p className="text-[10px] text-muted-foreground">
                       {formatDistanceToNow(new Date(movement.date), {
                         addSuffix: true,
                         locale: fr,
@@ -249,7 +249,7 @@ export default function Dashboard() {
 
                 <span
                   className={cn(
-                    "font-semibold text-xs lg:text-lg",
+                    "font-semibold text-xs",
                     movement.type === "in"
                       ? "text-green-500"
                       : "text-red-500"
@@ -274,11 +274,11 @@ export default function Dashboard() {
         ].map((action) => (
           <Link key={action.label} href={action.href}>
             <Card className="cursor-pointer shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
-              <CardContent className="p-4 lg:p-8 flex items-center gap-3">
+              <CardContent className="p-4 flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-primary/10">
-                  <action.icon className="h-4 w-4 lg:h-10 lg:w-10 text-primary" />
+                  <action.icon className="h-4 w-4 text-primary" />
                 </div>
-                <p className="text-sm lg:text-xl font-medium">{action.label}</p>
+                <p className="text-sm font-medium">{action.label}</p>
               </CardContent>
             </Card>
           </Link>

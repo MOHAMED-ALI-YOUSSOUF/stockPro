@@ -55,19 +55,6 @@ export interface Settings {
   storeName: string;
 }
 
-export const categories = [
-  'Électronique',
-  'Alimentation',
-  'Vêtements',
-  'Maison',
-  'Beauté',
-  'Sports',
-  'Jouets',
-  'Autres',
-];
-
-export const units = ['pièce', 'kg', 'litre', 'mètre', 'paquet', 'boîte'];
-
 export const generateBarcode = (): string => {
   const prefix = '200';
   const random = Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');

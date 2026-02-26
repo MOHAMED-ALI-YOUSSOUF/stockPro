@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useStore } from '@/store/useStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,25 +27,40 @@ export const ProductModal = ({ isOpen, onClose, product }: ProductModalProps) =>
   const { addProduct, updateProduct } = useStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Lecture des catégories et unités depuis le store avec fallback sûr
-  // Évite le crash si categories ou units sont undefined au moment du premier rendu
+  // Lecture des catégories et unités depuis le store
   const rawCategories = useStore((s) => s.categories);
   const rawUnits = useStore((s) => s.units);
-  const safeCategories: string[] = Array.isArray(rawCategories) ? rawCategories : [];
-  const safeUnits: string[] = Array.isArray(rawUnits) ? rawUnits : [];
 
-  // Fonction utilitaire : retourne la première valeur d'un tableau ou ''
+  // ── STABILISATION : useMemo garantit la même référence tant que le contenu
+  // ne change pas, empêchant les re-renders inutiles du Select Radix ──
+  const safeCategories = useMemo<string[]>(
+    () => (Array.isArray(rawCategories) ? rawCategories : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(rawCategories)]
+  );
+  const safeUnits = useMemo<string[]>(
+    () => (Array.isArray(rawUnits) ? rawUnits : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(rawUnits)]
+  );
+
+  // Refs pour accéder aux dernières valeurs dans l'effet sans les ajouter
+  // comme dépendances (évite la boucle infinie useEffect → setState → re-render)
+  const categoriesRef = useRef(safeCategories);
+  const unitsRef = useRef(safeUnits);
+  useEffect(() => { categoriesRef.current = safeCategories; }, [safeCategories]);
+  useEffect(() => { unitsRef.current = safeUnits; }, [safeUnits]);
+
   const firstOf = (arr: string[]): string => (arr.length > 0 ? arr[0] : '');
 
   const getInitialForm = () => ({
     name: '',
-    // Valeur par défaut sûre : premier élément du tableau ou chaîne vide
-    category: firstOf(safeCategories),
+    category: firstOf(categoriesRef.current),
     price: '',
     cost: '',
     quantity: '',
     minStock: '5',
-    unit: firstOf(safeUnits),
+    unit: firstOf(unitsRef.current),
     barcode: '',
   });
 
@@ -57,21 +72,21 @@ export const ProductModal = ({ isOpen, onClose, product }: ProductModalProps) =>
     setShowScanner(false);
   };
 
-  // Réinitialise le formulaire chaque fois que la modal s'ouvre ou que le produit change
+  // ── Pré-remplit le formulaire quand la modal s'ouvre ou le produit change ──
+  // Dépend UNIQUEMENT de `product` et `isOpen` (pas des tableaux de catégories/unités)
   useEffect(() => {
     if (!isOpen) return;
 
     if (product) {
- 
       // Mode édition : pré-remplit avec les données du produit existant
       setFormData({
         name: product.name,
-        category: product.category || firstOf(safeCategories),
+        category: product.category || firstOf(categoriesRef.current),
         price: product.price.toString(),
         cost: product.cost.toString(),
         quantity: product.quantity.toString(),
         minStock: product.minStock.toString(),
-        unit: product.unit || firstOf(safeUnits),
+        unit: product.unit || firstOf(unitsRef.current),
         barcode: product.barcode,
       });
     } else {
@@ -79,7 +94,24 @@ export const ProductModal = ({ isOpen, onClose, product }: ProductModalProps) =>
       setFormData(getInitialForm());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product, isOpen, safeCategories, safeUnits]);
+  }, [product, isOpen]);
+
+  // ── Quand les catégories/unités arrivent du store (async), met à jour
+  // les valeurs vides du formulaire pour choisir un défaut correct ──
+  useEffect(() => {
+    setFormData((prev) => {
+      const updates: Partial<typeof prev> = {};
+      if (!prev.category && safeCategories.length > 0) {
+        updates.category = safeCategories[0];
+      }
+      if (!prev.unit && safeUnits.length > 0) {
+        updates.unit = safeUnits[0];
+      }
+      // Ne pas setState si rien ne change (évite re-render inutile)
+      if (Object.keys(updates).length === 0) return prev;
+      return { ...prev, ...updates };
+    });
+  }, [safeCategories, safeUnits]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,13 +183,12 @@ export const ProductModal = ({ isOpen, onClose, product }: ProductModalProps) =>
             <div className="space-y-2">
               <Label htmlFor="category">Catégorie</Label>
               {safeCategories.length > 0 ? (
-              <Select
-  key={safeCategories.join('-')}
-  value={formData.category || ""}
-  onValueChange={(value) =>
-    setFormData((prev) => ({ ...prev, category: value }))
-  }
->
+                <Select
+                  value={formData.category || undefined}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, category: value }))
+                  }
+                >
                   <SelectTrigger className="input-modern">
                     <SelectValue placeholder="Choisir..." />
                   </SelectTrigger>
@@ -168,7 +199,6 @@ export const ProductModal = ({ isOpen, onClose, product }: ProductModalProps) =>
                   </SelectContent>
                 </Select>
               ) : (
-                /* Fallback texte libre si aucune catégorie configurée */
                 <Input
                   value={formData.category || ""}
                   onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
@@ -181,12 +211,11 @@ export const ProductModal = ({ isOpen, onClose, product }: ProductModalProps) =>
               <Label htmlFor="unit">Unité</Label>
               {safeUnits.length > 0 ? (
                 <Select
-  key={safeUnits.join('-')}
-  value={formData.unit || ""}
-  onValueChange={(value) =>
-    setFormData((prev) => ({ ...prev, unit: value }))
-  }
->
+                  value={formData.unit || undefined}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, unit: value }))
+                  }
+                >
                   <SelectTrigger className="input-modern">
                     <SelectValue placeholder="Choisir..." />
                   </SelectTrigger>
@@ -197,7 +226,6 @@ export const ProductModal = ({ isOpen, onClose, product }: ProductModalProps) =>
                   </SelectContent>
                 </Select>
               ) : (
-                /* Fallback texte libre si aucune unité configurée */
                 <Input
                   value={formData.unit || ""}
                   onChange={(e) => setFormData((prev) => ({ ...prev, unit: e.target.value }))}
