@@ -16,7 +16,6 @@ import {
 import { cn } from '@/lib/utils';
 import { ProductModal } from '@/components/ProductModal';
 import { BarcodeSticker } from '@/components/BarcodeSticker';
-import { categories } from '@/types/models';
 import type { Product } from '@/types/models';
 import {
   DropdownMenu,
@@ -44,7 +43,7 @@ import {
 } from '@/components/ui/select';
 
 const Products = () => {
-  const { products, deleteProduct } = useStore();
+  const { products, deleteProduct, categories } = useStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);

@@ -43,20 +43,75 @@ export const BarcodeSticker = ({ product, onClose }: BarcodeStickerProps) => {
         <head>
           <title>Étiquette - ${product.name}</title>
           <style>
-            body { margin: 0; padding: 20px; font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-            .sticker { padding: 16px; border: 2px dashed #e5e7eb; border-radius: 8px; text-align: center; background: white; }
-            .product-name { font-size: 14px; font-weight: 600; margin-bottom: 8px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-            .product-price { font-size: 18px; font-weight: 700; color: #10b981; margin-top: 8px; }
-            @media print { body { padding: 0; } .sticker { border: none; } }
-          </style>
+              @page {
+                margin: 10mm;
+              }
+
+              body {
+                margin: 0;
+                padding: 0;
+                font-family: Arial, sans-serif;
+              }
+
+              .page {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, 60mm);
+                gap: 10mm;
+                justify-content: center;
+              }
+
+              .sticker {
+                width: 60mm;
+                height: 40mm;
+                padding: 6mm;
+                box-sizing: border-box;
+                border: 1px dashed #e5e7eb;
+                border-radius: 6px;
+                text-align: center;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+              }
+
+              .product-name {
+                font-size: 12px;
+                font-weight: 600;
+                margin-bottom: 4px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+              }
+
+              .product-price {
+                font-size: 16px;
+                font-weight: 700;
+                margin-top: 4px;
+              }
+
+              @media print {
+                .sticker {
+                  border: none;
+                }
+              }
+            </style>
         </head>
-        <body>
-          <div class="sticker">
-            <div class="product-name">${product.name}</div>
-            ${stickerRef.current.querySelector('svg')?.outerHTML}
-            <div class="product-price">€${product.price.toFixed(2)}</div>
+       <body>
+          <div class="page">
+            ${Array.from({ length: 24 }).map(() => `
+              <div class="sticker">
+                <div class="product-name">${product.name}</div>
+                ${stickerRef.current.querySelector('svg')?.outerHTML}
+                <div class="product-price">${product.price.toFixed(2)} FDJ</div>
+              </div>
+            `).join('')}
           </div>
-          <script>window.onload = function() { window.print(); window.close(); }</script>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              window.close();
+            }
+          </script>
         </body>
       </html>
     `);
@@ -89,7 +144,7 @@ export const BarcodeSticker = ({ product, onClose }: BarcodeStickerProps) => {
                 margin={0}
               />
               <p className="text-2xl font-bold text-green-600 mt-3">
-                €{product.price.toFixed(2)}
+                {product.price.toFixed(2)} FDJ
               </p>
             </div>
           </div>

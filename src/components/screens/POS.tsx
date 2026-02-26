@@ -436,7 +436,7 @@ const [showMobileCart, setShowMobileCart] = useState(false);
 <Sheet open={showMobileCart} onOpenChange={setShowMobileCart}>
   <SheetContent
     side="bottom"
-    className="h-[98vh] rounded-t-3xl flex flex-col p-0"
+    className="h-[90vh] rounded-t-3xl flex flex-col p-0"
   >
     <SheetHeader className="p-4 border-b">
       <SheetTitle>Panier</SheetTitle>

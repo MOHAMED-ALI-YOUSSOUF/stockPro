@@ -72,7 +72,7 @@ export const Layout = ({ children }: LayoutProps) => {
         : user?.email?.slice(0, 2).toUpperCase() || 'U';
 
     return (
-        <div className="min-h-screen flex">
+        <div className="h-screen flex overflow-hidden">
             {sidebarOpen && (
                 <div
                     className="fixed inset-0 bg-black/50 z-40 lg:hidden"

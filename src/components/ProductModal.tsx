@@ -62,15 +62,16 @@ export const ProductModal = ({ isOpen, onClose, product }: ProductModalProps) =>
     if (!isOpen) return;
 
     if (product) {
+ 
       // Mode édition : pré-remplit avec les données du produit existant
       setFormData({
         name: product.name,
-        category: product.category ?? firstOf(safeCategories),
+        category: product.category || firstOf(safeCategories),
         price: product.price.toString(),
         cost: product.cost.toString(),
         quantity: product.quantity.toString(),
         minStock: product.minStock.toString(),
-        unit: product.unit ?? firstOf(safeUnits),
+        unit: product.unit || firstOf(safeUnits),
         barcode: product.barcode,
       });
     } else {
@@ -78,7 +79,7 @@ export const ProductModal = ({ isOpen, onClose, product }: ProductModalProps) =>
       setFormData(getInitialForm());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product, isOpen]);
+  }, [product, isOpen, safeCategories, safeUnits]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,10 +151,13 @@ export const ProductModal = ({ isOpen, onClose, product }: ProductModalProps) =>
             <div className="space-y-2">
               <Label htmlFor="category">Catégorie</Label>
               {safeCategories.length > 0 ? (
-                <Select
-                  value={formData.category}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, category: value }))}
-                >
+              <Select
+  key={safeCategories.join('-')}
+  value={formData.category || ""}
+  onValueChange={(value) =>
+    setFormData((prev) => ({ ...prev, category: value }))
+  }
+>
                   <SelectTrigger className="input-modern">
                     <SelectValue placeholder="Choisir..." />
                   </SelectTrigger>
@@ -166,7 +170,7 @@ export const ProductModal = ({ isOpen, onClose, product }: ProductModalProps) =>
               ) : (
                 /* Fallback texte libre si aucune catégorie configurée */
                 <Input
-                  value={formData.category}
+                  value={formData.category || ""}
                   onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
                   className="input-modern"
                   placeholder="Ex: Électronique"
@@ -177,9 +181,12 @@ export const ProductModal = ({ isOpen, onClose, product }: ProductModalProps) =>
               <Label htmlFor="unit">Unité</Label>
               {safeUnits.length > 0 ? (
                 <Select
-                  value={formData.unit}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, unit: value }))}
-                >
+  key={safeUnits.join('-')}
+  value={formData.unit || ""}
+  onValueChange={(value) =>
+    setFormData((prev) => ({ ...prev, unit: value }))
+  }
+>
                   <SelectTrigger className="input-modern">
                     <SelectValue placeholder="Choisir..." />
                   </SelectTrigger>
@@ -192,7 +199,7 @@ export const ProductModal = ({ isOpen, onClose, product }: ProductModalProps) =>
               ) : (
                 /* Fallback texte libre si aucune unité configurée */
                 <Input
-                  value={formData.unit}
+                  value={formData.unit || ""}
                   onChange={(e) => setFormData((prev) => ({ ...prev, unit: e.target.value }))}
                   className="input-modern"
                   placeholder="Ex: pièce"
