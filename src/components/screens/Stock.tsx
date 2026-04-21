@@ -10,6 +10,7 @@ import {
   Package,
   Calendar,
   Camera,
+  Undo2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -21,7 +22,7 @@ import { toast } from 'sonner';
 const Stock = () => {
   const { movements, products, getProductByBarcode } = useStore();
   const [searchQuery, setSearchQuery] = useState('');
-  const [movementType, setMovementType] = useState<'in' | 'out' | null>(null);
+  const [movementType, setMovementType] = useState<'in' | 'out' | 'return' | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
   const [showScanner, setShowScanner] = useState(false);
   const [scanType, setScanType] = useState<'in' | 'out'>('in');
@@ -30,7 +31,7 @@ const Stock = () => {
     movement.productName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleOpenModal = (type: 'in' | 'out', productId?: string) => {
+  const handleOpenModal = (type: 'in' | 'out' | 'return', productId?: string) => {
     setMovementType(type);
     setSelectedProduct(productId || null);
   };
@@ -74,6 +75,10 @@ const Stock = () => {
           <Button onClick={() => handleOpenModal('out')} variant="destructive" className="gap-2">
             <ArrowUpRight className="w-4 h-4" />
             Sortie
+          </Button>
+          <Button onClick={() => handleOpenModal('return')} className="gap-2 bg-orange-500 hover:bg-orange-600">
+            <Undo2 className="w-4 h-4" />
+            Retour client
           </Button>
         </div>
       </div>
@@ -160,11 +165,15 @@ const Stock = () => {
                       <div
                         className={cn(
                           'w-10 h-10 rounded-xl flex items-center justify-center',
-                          movement.type === 'in' ? 'bg-green-500/10' : 'bg-red-500/10'
+                          movement.type === 'in' ? 'bg-green-500/10'
+                          : movement.type === 'return' ? 'bg-orange-500/10'
+                          : 'bg-red-500/10'
                         )}
                       >
                         {movement.type === 'in' ? (
                           <ArrowDownRight className="w-5 h-5 text-green-500" />
+                        ) : movement.type === 'return' ? (
+                          <Undo2 className="w-5 h-5 text-orange-500" />
                         ) : (
                           <ArrowUpRight className="w-5 h-5 text-red-500" />
                         )}
@@ -177,11 +186,18 @@ const Stock = () => {
                       <span
                         className={cn(
                           'font-bold',
-                          movement.type === 'in' ? 'text-green-500' : 'text-red-500'
+                          movement.type === 'in' ? 'text-green-500'
+                          : movement.type === 'return' ? 'text-orange-500'
+                          : 'text-red-500'
                         )}
                       >
-                        {movement.type === 'in' ? '+' : '-'}
+                        {movement.type === 'in' || movement.type === 'return' ? '+' : '-'}
                         {movement.quantity}
+                        {movement.type === 'return' && (
+                          <span className="ml-1 text-[10px] font-semibold uppercase bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full">
+                            retour
+                          </span>
+                        )}
                       </span>
                     </td>
                     <td className="p-4">

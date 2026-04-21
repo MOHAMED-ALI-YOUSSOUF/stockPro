@@ -138,7 +138,7 @@ function validateMovementPayload(payload: any): boolean {
     }
   }
 
-  if (!['in', 'out', 'sale'].includes(payload.type)) {
+  if (!['in', 'out', 'sale', 'return'].includes(payload.type)) {
     console.error(`Invalid movement type: ${payload.type}`, payload);
     return false;
   }

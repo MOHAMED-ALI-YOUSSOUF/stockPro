@@ -286,10 +286,18 @@ export const useStore = create<StoreState>()(
           ? normalizePaymentMethod(movementData.paymentMethod)
           : undefined;
 
+        const product = get().products.find(p => p.id === movementData.productId);
+
+        // Pour les retours : unitCost = prix de VENTE (pour déduire le CA correctement)
+        // Pour les entrées/sorties : unitCost = prix d'ACHAT (pour le calcul du bénéfice)
+        const unitCost = movementData.type === 'return'
+          ? (product?.price || 0)
+          : (product?.cost || 0);
+
         const sanitizedMovementData = {
           ...movementData,
           paymentMethod: normalizedPaymentMethod,
-          unitCost: get().products.find(p => p.id === movementData.productId)?.cost || 0
+          unitCost,
         };
 
         const tempMovement: StockMovement = {
@@ -306,7 +314,7 @@ export const useStore = create<StoreState>()(
 
               let newQuantity = p.quantity;
 
-              if (movementData.type === 'in') {
+              if (movementData.type === 'in' || movementData.type === 'return') {
                 newQuantity = p.quantity + movementData.quantity;
               }
 
@@ -323,19 +331,19 @@ export const useStore = create<StoreState>()(
           };
         });
 
-        const product = get().products.find((p) => p.id === movementData.productId);
-        if (product) {
+        const updatedProduct = get().products.find((p) => p.id === movementData.productId);
+        if (updatedProduct) {
           if (isOnline() && userId) {
             try {
               await insertMovement(sanitizedMovementData, userId);
-              await updateProductDb(movementData.productId, { quantity: product.quantity });
+              await updateProductDb(movementData.productId, { quantity: updatedProduct.quantity });
             } catch (error) {
               addToQueue({ type: 'insert_movement', payload: sanitizedMovementData });
-              addToQueue({ type: 'update_product', payload: { id: movementData.productId, updates: { quantity: product.quantity } } });
+              addToQueue({ type: 'update_product', payload: { id: movementData.productId, updates: { quantity: updatedProduct.quantity } } });
             }
           } else {
             addToQueue({ type: 'insert_movement', payload: sanitizedMovementData });
-            addToQueue({ type: 'update_product', payload: { id: movementData.productId, updates: { quantity: product.quantity } } });
+            addToQueue({ type: 'update_product', payload: { id: movementData.productId, updates: { quantity: updatedProduct.quantity } } });
           }
         }
       },
@@ -508,7 +516,18 @@ export const useStore = create<StoreState>()(
             return format(d, 'MMM', { locale: fr }) === month && d.getFullYear() === new Date().getFullYear();
           });
           const total = monthSales.reduce((acc, s) => acc + (s.totalFinal || s.total), 0);
-          return { month, value: total };
+          const returnsTotal = (get().movements || [])
+            .filter(m => {
+              const d = new Date(m.date);
+              return m.type === 'return'
+                && format(d, 'MMM', { locale: fr }) === month
+                && d.getFullYear() === new Date().getFullYear();
+            })
+            .reduce((acc, m) => {
+              const p = get().products.find(prod => prod.id === m.productId);
+              return acc + (m.unitCost || p?.price || 0) * m.quantity;
+            }, 0);
+          return { month, value: Math.max(0, total - returnsTotal) };
         });
       },
 
@@ -579,9 +598,16 @@ export const useStore = create<StoreState>()(
       getTodaySales: () => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        return (get().sales || [])
+        const salesTotal = (get().sales || [])
           .filter((s) => new Date(s.date) >= today)
           .reduce((acc, s) => acc + (s.totalFinal || s.total), 0);
+        const returnsTotal = (get().movements || [])
+          .filter((m) => m.type === 'return' && new Date(m.date) >= today)
+          .reduce((acc, m) => {
+            const p = get().products.find(prod => prod.id === m.productId);
+            return acc + (m.unitCost || p?.price || 0) * m.quantity;
+          }, 0);
+        return Math.max(0, salesTotal - returnsTotal);
       },
 
       getRecentMovements: (limit = 10) => (get().movements || []).slice(0, limit),

@@ -98,13 +98,21 @@ export async function insertMovement(
   movement: Omit<StockMovement, 'id' | 'date'>,
   userId: string
 ): Promise<StockMovement> {
+  // 'return' n'est pas un type connu de Supabase (check constraint: in/out/sale)
+  // On mappe 'return' → 'in' et on préfixe la note avec [RETOUR] pour le distinguer
+  const isReturn = movement.type === 'return';
+  const dbType = isReturn ? 'in' : movement.type;
+  const dbNote = isReturn
+    ? `[RETOUR] ${movement.note || 'Retour client'}`
+    : (movement.note || null);
+
   let payload: any = {
     user_id: userId,
     product_id: movement.productId,
     product_name: movement.productName,
-    type: movement.type,
+    type: dbType,
     quantity: movement.quantity,
-    note: movement.note || null,
+    note: dbNote,
     payment_method: (movement as any).paymentMethod || null,
     unit_cost: (movement as any).unitCost || null,
   };
@@ -320,14 +328,22 @@ function mapDbProduct(row: any): Product {
 }
 
 function mapDbMovement(row: any): StockMovement {
+  // Restaurer le type 'return' depuis le préfixe [RETOUR] dans la note
+  const noteRaw: string = row.note || '';
+  const isReturn = noteRaw.startsWith('[RETOUR]');
+  const restoredType = isReturn ? 'return' : row.type;
+  const cleanNote = isReturn
+    ? noteRaw.replace(/^\[RETOUR\]\s*/, '') || undefined
+    : (row.note || undefined);
+
   return {
     id: row.id,
     productId: row.product_id,
     productName: row.product_name,
-    type: row.type,
+    type: restoredType,
     quantity: row.quantity,
     date: new Date(row.created_at),
-    note: row.note || undefined,
+    note: cleanNote,
     paymentMethod: row.payment_method || undefined,
     unitCost: row.unit_cost || undefined,
   };

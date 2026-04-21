@@ -111,7 +111,7 @@ const RevenueBreakdownCard = ({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 const Reports = () => {
-  const { products, sales } = useStore();
+  const { products, sales, movements } = useStore();
 
   let totalRevenueHT = 0;
   let totalRevenueTTC = 0;
@@ -142,6 +142,28 @@ const Reports = () => {
   const profit = Math.max(0, totalRevenueHT - totalCost);
   const marginHT = totalRevenueHT > 0 ? (profit / totalRevenueHT) * 100 : 0;
 
+  // ─── Déduction des retours clients (type === 'return') ───────────────────
+  const returnMovements = (movements || []).filter(m => m.type === 'return');
+
+  // CA remboursé = prix de vente × quantité (unitCost = product.price pour les retours)
+  const totalReturnsTTC = returnMovements.reduce((acc, m) => {
+    const p = products.find(prod => prod.id === m.productId);
+    return acc + (m.unitCost || p?.price || 0) * m.quantity;
+  }, 0);
+
+  // Coût d'achat récupéré = prix d'achat du produit × quantité
+  const totalReturnsCost = returnMovements.reduce((acc, m) => {
+    const p = products.find(prod => prod.id === m.productId);
+    return acc + (p?.cost || 0) * m.quantity;
+  }, 0);
+
+  const totalRevenueHTNet = Math.max(0, totalRevenueHT - totalReturnsTTC);
+  const totalRevenueTTCNet = Math.max(0, totalRevenueTTC - totalReturnsTTC);
+  const totalTVANet = Math.max(0, totalTVA - totalReturnsTTC * ((totalTVA / (totalRevenueHT || 1))));
+  const totalCostNet = Math.max(0, totalCost - totalReturnsCost);
+  const profitNet = Math.max(0, totalRevenueHTNet - totalCostNet);
+  const marginHTNet = totalRevenueHTNet > 0 ? (profitNet / totalRevenueHTNet) * 100 : 0;
+
   const categoryData = products
     .reduce((acc, product) => {
       const safeQty = Math.max(0, product.quantity);
@@ -166,7 +188,16 @@ const Reports = () => {
         return saleDate >= dayStart && saleDate <= dayEnd;
       })
       .reduce((acc, s) => acc + s.total, 0);
-    return { day: format(date, 'EEE', { locale: fr }), ventes: daySales };
+    const dayReturns = (movements || [])
+      .filter((m) => {
+        const d = new Date(m.date);
+        return m.type === 'return' && d >= dayStart && d <= dayEnd;
+      })
+      .reduce((acc, m) => {
+        const p = products.find(prod => prod.id === m.productId);
+        return acc + (m.unitCost || p?.price || 0) * m.quantity;
+      }, 0);
+    return { day: format(date, 'EEE', { locale: fr }), ventes: Math.max(0, daySales - dayReturns) };
   });
 
   const productSales = sales.flatMap((s) => s.items).reduce(
@@ -182,6 +213,16 @@ const Reports = () => {
     },
     [] as { id: string; name: string; quantity: number; revenue: number }[]
   );
+
+  // Déduire les retours par produit
+  for (const ret of returnMovements) {
+    const found = productSales.find(p => p.id === ret.productId);
+    const pInfo = products.find(prod => prod.id === ret.productId);
+    if (found) {
+      found.quantity = Math.max(0, found.quantity - ret.quantity);
+      found.revenue = Math.max(0, found.revenue - (ret.unitCost || pInfo?.price || 0) * ret.quantity);
+    }
+  }
 
   const topProducts = productSales.sort((a, b) => b.revenue - a.revenue).slice(0, 5);
 
@@ -204,12 +245,12 @@ const Reports = () => {
         <div className="col-span-2 bg-card rounded-2xl border border-primary/30 p-5 hover:shadow-md transition-shadow relative overflow-hidden">
           <div className="pointer-events-none absolute -top-8 -right-8 w-32 h-32 rounded-full bg-primary/8 blur-3xl" />
 
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">Chiffre d'Affaires</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">Chiffre d'Affaires <span className="text-[10px] normal-case text-emerald-600 font-semibold">(après retours)</span></p>
 
           {/* TTC big number */}
           <div className="flex items-baseline gap-2 mb-4">
             <span className="text-4xl font-extrabold text-primary">
-              {totalRevenueTTC.toLocaleString('fr-FR')}
+              {totalRevenueTTCNet.toLocaleString('fr-FR')}
             </span>
             <span className="text-base font-semibold text-muted-foreground">FDJ TTC</span>
           </div>
@@ -219,14 +260,14 @@ const Reports = () => {
             <div className="bg-muted/60 rounded-xl px-4 py-3">
               <p className="text-xs text-muted-foreground mb-1 font-medium">Hors Taxe</p>
               <p className="text-lg font-bold leading-none">
-                {totalRevenueHT.toLocaleString('fr-FR')}
+                {totalRevenueHTNet.toLocaleString('fr-FR')}
                 <span className="text-xs font-normal text-muted-foreground ml-1">FDJ</span>
               </p>
             </div>
             <div className="bg-purple-500/10 rounded-xl px-4 py-3">
               <p className="text-xs text-purple-500 mb-1 font-medium">TVA collectée</p>
               <p className="text-lg font-bold text-purple-700 dark:text-purple-400 leading-none">
-                {totalTVA.toLocaleString('fr-FR')}
+                {totalTVANet.toLocaleString('fr-FR')}
                 <span className="text-xs font-normal ml-1">FDJ</span>
               </p>
             </div>
@@ -236,8 +277,8 @@ const Reports = () => {
         {/* Bénéfice Net */}
         <StatCard
           label="Bénéfice Net"
-          value={`${profit.toLocaleString('fr-FR')} FDJ`}
-          sub="Calculé sur le CA HT"
+          value={`${profitNet.toLocaleString('fr-FR')} FDJ`}
+          sub="Calculé sur le CA HT net"
           icon={<PiggyBank className="w-5 h-5" />}
           accent="bg-emerald-500/10"
           iconColor="text-emerald-600"
@@ -248,11 +289,11 @@ const Reports = () => {
         {/* Marge */}
         <StatCard
           label="Marge bénéficiaire"
-          value={`${marginHT.toFixed(1)} %`}
-          sub={marginHT < 10 ? '⚠ Marge faible' : '✓ Marge correcte'}
+          value={`${marginHTNet.toFixed(1)} %`}
+          sub={marginHTNet < 10 ? '⚠ Marge faible' : '✓ Marge correcte'}
           icon={<Percent className="w-5 h-5" />}
-          accent={marginHT < 10 ? 'bg-orange-500/10' : 'bg-emerald-500/10'}
-          iconColor={marginHT < 10 ? 'text-orange-500' : 'text-emerald-500'}
+          accent={marginHTNet < 10 ? 'bg-orange-500/10' : 'bg-emerald-500/10'}
+          iconColor={marginHTNet < 10 ? 'text-orange-500' : 'text-emerald-500'}
           highlight={false}
         />
       </div>

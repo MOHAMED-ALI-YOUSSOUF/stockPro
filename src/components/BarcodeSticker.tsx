@@ -101,7 +101,7 @@ export const BarcodeSticker = ({ product, onClose }: BarcodeStickerProps) => {
               <div class="sticker">
                 <div class="product-name">${product.name}</div>
                 ${stickerRef.current.querySelector('svg')?.outerHTML}
-                <div class="product-price">${product.price.toFixed(2)} FDJ</div>
+                <div class="product-price">${product.price} FDJ</div>
               </div>
             `).join('')}
           </div>
@@ -144,7 +144,7 @@ export const BarcodeSticker = ({ product, onClose }: BarcodeStickerProps) => {
                 margin={0}
               />
               <p className="text-2xl font-bold text-green-600 mt-3">
-                {product.price.toFixed(2)} FDJ
+                {product.price} FDJ
               </p>
             </div>
           </div>

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useStore } from '@/store/useStore';
 import { Button } from '@/components/ui/button';
-import { Printer, ArrowLeft } from 'lucide-react';
+import { Printer, ArrowLeft, MessageCircle, Send } from 'lucide-react';
 import { Sale } from '@/types/models';
 import { Loader2 } from 'lucide-react';
 
@@ -56,12 +56,52 @@ export default function ReceiptPage() {
     const displayAddress = address || '';
     const displayPhone = phone || '';
 
+    const shareOnWhatsApp = () => {
+        if (!sale) return;
+
+        let text = `*${displayStoreName}*\n`;
+        if (displayPhone) text += `Tél: ${displayPhone}\n`;
+        text += `------------------------\n`;
+        text += `Date: ${new Date(sale.date).toLocaleString('fr-FR')}\n`;
+        text += `Ticket: #${sale.id.slice(0, 8).toUpperCase()}\n`;
+        text += `------------------------\n`;
+        
+        (sale.items || []).forEach(item => {
+            const name = item.product?.name ?? 'Article inconnu';
+            const price = item.product?.price ?? 0;
+            const total = price * item.quantity;
+            text += `${name} (Qté: ${item.quantity}) : ${total.toFixed(0)} FDJ\n`;
+        });
+        
+        text += `------------------------\n`;
+        
+        if ((sale.discount || 0) > 0) {
+            text += `Total Brut: ${(sale.totalBrut || sale.total || 0).toFixed(0)} FDJ\n`;
+            text += `Remise: -${(sale.discount || 0).toFixed(0)} FDJ\n`;
+        }
+        
+        text += `*NET À PAYER: ${(sale.totalFinal || sale.total || 0).toFixed(0)} FDJ*\n`;
+        text += `Paiement: ${(sale.paymentMethod || '').replace('-', ' ').toUpperCase()}\n`;
+        text += `------------------------\n`;
+        text += `Merci de votre visite !\n`;
+
+        const encodedText = encodeURIComponent(text);
+        window.open(`https://wa.me/?text=${encodedText}`, '_blank');
+    };
+
     return (
         <div className="min-h-screen bg-gray-100 p-4 flex flex-col items-center">
-            {/* Boutons Retour / Imprimer (masqués à l'impression) */}
-            <div className="w-full max-w-[80mm] mb-6 flex gap-2 print:hidden">
-                <Button variant="outline" size="sm" onClick={() => router.back()}>
+            {/* Boutons Retour / Partager / Imprimer (masqués à l'impression) */}
+            <div className="w-full max-w-[80mm] mb-6 flex flex-wrap gap-2 print:hidden">
+                <Button variant="outline" size="sm" onClick={() => router.back()} className="flex-none">
                     <ArrowLeft className="w-4 h-4 mr-2" /> Retour
+                </Button>
+                <Button 
+                    size="sm" 
+                    className="flex-1 bg-[#25D366] hover:bg-[#1DA851] text-white border-0" 
+                    onClick={shareOnWhatsApp}
+                >
+                    <Send className="w-4 h-4 mr-2" /> WhatsApp
                 </Button>
                 <Button size="sm" className="flex-1" onClick={() => window.print()}>
                     <Printer className="w-4 h-4 mr-2" /> Imprimer

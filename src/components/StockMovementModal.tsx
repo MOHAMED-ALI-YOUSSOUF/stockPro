@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { X, ArrowDownRight, ArrowUpRight } from 'lucide-react';
+import { X, ArrowDownRight, ArrowUpRight, Undo2 } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 interface StockMovementModalProps {
-  type: 'in' | 'out';
+  type: 'in' | 'out' | 'return';
   productId?: string | null;
   onClose: () => void;
 }
@@ -26,7 +26,7 @@ export const StockMovementModal = ({ type, productId, onClose }: StockMovementMo
   const { products, addMovement } = useStore();
   const [selectedProduct, setSelectedProduct] = useState(productId || '');
   const [quantity, setQuantity] = useState('');
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState(type === 'return' ? 'Retour client' : '');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -34,6 +34,12 @@ export const StockMovementModal = ({ type, productId, onClose }: StockMovementMo
       setSelectedProduct(productId);
     }
   }, [productId]);
+
+  useEffect(() => {
+    if (type === 'return') {
+      setNote('Retour client');
+    }
+  }, [type]);
 
   const selectedProductData = products.find((p) => p.id === selectedProduct);
 
@@ -54,17 +60,28 @@ export const StockMovementModal = ({ type, productId, onClose }: StockMovementMo
 
     setIsSubmitting(true);
     try {
+      // Les retours sont des mouvements de type 'return' (réintègrent le stock + impactent les stats)
+      // Les entrées normales restent 'in'
       await addMovement({
         productId: selectedProduct,
         productName: selectedProductData?.name || '',
         type,
         quantity: qty,
         note: note || undefined,
-      });
+        // Pour les retours : unitCost = prix de VENTE (ce que le client avait payé)
+        // Pour les entrées/sorties normales : unitCost = prix d'achat
+        unitCost: type === 'return'
+          ? selectedProductData?.price
+          : selectedProductData?.cost,
+      } as any);
 
-      toast.success(
-        type === 'in' ? 'Entrée de stock enregistrée' : 'Sortie de stock enregistrée'
-      );
+      const successMessages = {
+        'in': "Entrée de stock enregistrée",
+        'out': "Sortie de stock enregistrée",
+        'return': "Retour client enregistré — stock et statistiques mis à jour",
+      };
+
+      toast.success(successMessages[type]);
       onClose();
     } catch {
       toast.error('Une erreur est survenue');
@@ -73,26 +90,48 @@ export const StockMovementModal = ({ type, productId, onClose }: StockMovementMo
     }
   };
 
+  const typeConfig = {
+    'in': {
+      icon: <ArrowDownRight className="w-5 h-5 text-green-500" />,
+      bg: 'bg-green-500/10',
+      label: 'Entrée de stock',
+      btnClass: 'bg-green-500 hover:bg-green-600',
+      btnLabel: "Enregistrer l'entrée",
+    },
+    'out': {
+      icon: <ArrowUpRight className="w-5 h-5 text-red-500" />,
+      bg: 'bg-red-500/10',
+      label: 'Sortie de stock',
+      btnClass: 'bg-red-500 hover:bg-red-600',
+      btnLabel: "Enregistrer la sortie",
+    },
+    'return': {
+      icon: <Undo2 className="w-5 h-5 text-orange-500" />,
+      bg: 'bg-orange-500/10',
+      label: 'Retour client',
+      btnClass: 'bg-orange-500 hover:bg-orange-600',
+      btnLabel: "Enregistrer le retour",
+    },
+  };
+
+  const config = typeConfig[type];
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-card rounded-2xl w-full max-w-md animate-scale-in">
         <div className="flex items-center justify-between p-6 border-b border-border">
           <div className="flex items-center gap-3">
-            <div
-              className={cn(
-                'w-10 h-10 rounded-xl flex items-center justify-center',
-                type === 'in' ? 'bg-green-500/10' : 'bg-red-500/10'
-              )}
-            >
-              {type === 'in' ? (
-                <ArrowDownRight className="w-5 h-5 text-green-500" />
-              ) : (
-                <ArrowUpRight className="w-5 h-5 text-red-500" />
+            <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', config.bg)}>
+              {config.icon}
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold">{config.label}</h2>
+              {type === 'return' && (
+                <p className="text-xs text-orange-500 mt-0.5">
+                  Le stock sera réintégré · les ventes seront corrigées
+                </p>
               )}
             </div>
-            <h2 className="text-xl font-semibold">
-              {type === 'in' ? 'Entrée de stock' : 'Sortie de stock'}
-            </h2>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
@@ -130,6 +169,10 @@ export const StockMovementModal = ({ type, productId, onClose }: StockMovementMo
                 </span>
               </div>
               <div className="flex justify-between mt-1">
+                <span className="text-muted-foreground">Prix de vente:</span>
+                <span className="font-medium">{selectedProductData.price} FDJ</span>
+              </div>
+              <div className="flex justify-between mt-1">
                 <span className="text-muted-foreground">Code barre:</span>
                 <span className="font-mono">{selectedProductData.barcode}</span>
               </div>
@@ -150,7 +193,7 @@ export const StockMovementModal = ({ type, productId, onClose }: StockMovementMo
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="note">Note (optionnel)</Label>
+            <Label htmlFor="note">Note {type !== 'return' ? '(optionnel)' : ''}</Label>
             <Textarea
               id="note"
               value={note}
@@ -167,12 +210,9 @@ export const StockMovementModal = ({ type, productId, onClose }: StockMovementMo
             <Button
               type="submit"
               disabled={isSubmitting}
-              className={cn(
-                'flex-1',
-                type === 'in' ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'
-              )}
+              className={cn('flex-1', config.btnClass)}
             >
-              {type === 'in' ? "Enregistrer l'entrée" : 'Enregistrer la sortie'}
+              {isSubmitting ? 'Enregistrement...' : config.btnLabel}
             </Button>
           </div>
         </form>
