@@ -15,6 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { PinProtection } from '@/components/PinProtection';
 import {
   BarChart,
   Bar,
@@ -121,19 +122,15 @@ const Reports = () => {
   for (const sale of sales) {
     const saleTTC = sale.totalFinal || 0;
     const vatRate = sale.vatRate || 0;
-    const saleHT =
-      sale.totalBrut ??
-      (vatRate > 0 ? saleTTC / (1 + vatRate / 100) : saleTTC);
-    const saleTVA =
-      sale.vatTotal ??
-      (vatRate > 0 ? saleTTC - saleHT : 0);
+    const saleHT = (sale.totalBrut || 0) - (sale.discount || 0);
+    const saleTVA = saleHT * (vatRate / 100);
 
-    totalRevenueTTC += Math.max(0, saleTTC);
-    totalRevenueHT += Math.max(0, saleHT);
-    totalTVA += Math.max(0, saleTVA);
+    totalRevenueTTC += saleTTC;
+    totalRevenueHT += saleHT;
+    totalTVA += saleTVA;
 
     for (const item of sale.items || []) {
-      const quantity = Math.max(0, item.quantity || 0);
+      const quantity = item.quantity || 0;
       const unitCost = item.unitCost ?? item.product?.cost ?? 0;
       totalCost += unitCost * quantity;
     }
@@ -157,11 +154,11 @@ const Reports = () => {
     return acc + (p?.cost || 0) * m.quantity;
   }, 0);
 
-  const totalRevenueHTNet = Math.max(0, totalRevenueHT - totalReturnsTTC);
-  const totalRevenueTTCNet = Math.max(0, totalRevenueTTC - totalReturnsTTC);
-  const totalTVANet = Math.max(0, totalTVA - totalReturnsTTC * ((totalTVA / (totalRevenueHT || 1))));
-  const totalCostNet = Math.max(0, totalCost - totalReturnsCost);
-  const profitNet = Math.max(0, totalRevenueHTNet - totalCostNet);
+  const totalRevenueHTNet = totalRevenueHT - totalReturnsTTC;
+  const totalRevenueTTCNet = totalRevenueTTC - totalReturnsTTC;
+  const totalTVANet = totalTVA - totalReturnsTTC * ((totalTVA / (totalRevenueHT || 1)));
+  const totalCostNet = totalCost - totalReturnsCost;
+  const profitNet = totalRevenueHTNet - totalCostNet;
   const marginHTNet = totalRevenueHTNet > 0 ? (profitNet / totalRevenueHTNet) * 100 : 0;
 
   const categoryData = products
@@ -227,8 +224,9 @@ const Reports = () => {
   const topProducts = productSales.sort((a, b) => b.revenue - a.revenue).slice(0, 5);
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Page title */}
+    <PinProtection>
+      <div className="space-y-6 animate-fade-in">
+        {/* Page title */}
       <div>
         <h1 className="text-2xl lg:text-3xl font-bold">Rapports</h1>
         <p className="text-muted-foreground mt-1">Analyse de vos performances</p>
@@ -393,6 +391,7 @@ const Reports = () => {
         )}
       </div>
     </div>
+    </PinProtection>
   );
 };
 

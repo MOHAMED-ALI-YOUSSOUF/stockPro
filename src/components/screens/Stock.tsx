@@ -20,7 +20,7 @@ import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { toast } from 'sonner';
 
 const Stock = () => {
-  const { movements, products, getProductByBarcode } = useStore();
+  const { movements, products, getProductByBarcode, sales } = useStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [movementType, setMovementType] = useState<'in' | 'out' | 'return' | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
@@ -63,27 +63,27 @@ const Stock = () => {
           <h1 className="text-2xl lg:text-3xl font-bold">Gestion du Stock</h1>
           <p className="text-muted-foreground mt-1">Entrées et sorties de stock</p>
         </div>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={() => handleScanClick('in')} className="gap-2">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
+          <Button variant="outline" onClick={() => handleScanClick('in')} className="gap-2 flex-1 sm:flex-none">
             <Camera className="w-4 h-4" />
-            Scanner
+            <span className="hidden sm:inline">Scanner</span>
           </Button>
-          <Button onClick={() => handleOpenModal('in')} className="gap-2 bg-green-500 hover:bg-green-600">
+          <Button onClick={() => handleOpenModal('in')} className="gap-2 bg-green-500 hover:bg-green-600 flex-1 sm:flex-none">
             <ArrowDownRight className="w-4 h-4" />
             Entrée
           </Button>
-          <Button onClick={() => handleOpenModal('out')} variant="destructive" className="gap-2">
+          <Button onClick={() => handleOpenModal('out')} variant="destructive" className="gap-2 flex-1 sm:flex-none">
             <ArrowUpRight className="w-4 h-4" />
             Sortie
           </Button>
-          <Button onClick={() => handleOpenModal('return')} className="gap-2 bg-orange-500 hover:bg-orange-600">
+          <Button onClick={() => handleOpenModal('return')} className="gap-2 bg-orange-500 hover:bg-orange-600 w-full sm:w-auto">
             <Undo2 className="w-4 h-4" />
             Retour client
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="stat-card">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center">
@@ -120,6 +120,19 @@ const Stock = () => {
             <div>
               <p className="text-sm text-muted-foreground">Total mouvements</p>
               <p className="text-2xl font-bold">{movements.length}</p>
+            </div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center">
+              <Undo2 className="w-6 h-6 text-orange-500" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Retours total</p>
+              <p className="text-2xl font-bold">
+                {movements.filter((m) => m.type === 'return').length + sales.filter((s) => s.type === 'return').length}
+              </p>
             </div>
           </div>
         </div>
@@ -187,13 +200,13 @@ const Stock = () => {
                         className={cn(
                           'font-bold',
                           movement.type === 'in' ? 'text-green-500'
-                          : movement.type === 'return' ? 'text-orange-500'
+                          : movement.type === 'return' || movement.quantity < 0 ? 'text-orange-500'
                           : 'text-red-500'
                         )}
                       >
-                        {movement.type === 'in' || movement.type === 'return' ? '+' : '-'}
-                        {movement.quantity}
-                        {movement.type === 'return' && (
+                        {movement.type === 'in' || movement.type === 'return' || movement.quantity < 0 ? '+' : '-'}
+                        {Math.abs(movement.quantity)}
+                        {(movement.type === 'return' || movement.quantity < 0) && (
                           <span className="ml-1 text-[10px] font-semibold uppercase bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full">
                             retour
                           </span>

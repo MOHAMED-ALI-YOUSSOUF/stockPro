@@ -23,9 +23,10 @@ interface StockMovementModalProps {
 }
 
 export const StockMovementModal = ({ type, productId, onClose }: StockMovementModalProps) => {
-  const { products, addMovement } = useStore();
+  const { products, addMovement, processReturn } = useStore();
   const [selectedProduct, setSelectedProduct] = useState(productId || '');
   const [quantity, setQuantity] = useState('');
+  const [ticketId, setTicketId] = useState('');
   const [note, setNote] = useState(type === 'return' ? 'Retour client' : '');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -60,16 +61,20 @@ export const StockMovementModal = ({ type, productId, onClose }: StockMovementMo
 
     setIsSubmitting(true);
     try {
-      // Les retours sont des mouvements de type 'return' (réintègrent le stock + impactent les stats)
-      // Les entrées normales restent 'in'
+      if (type === 'return' && ticketId.trim() !== '') {
+        await processReturn(ticketId.trim(), selectedProduct, qty);
+        toast.success("Retour enregistré comme un Ticket de Retour.");
+        onClose();
+        return;
+      }
+
+      // Fallback pour les entrées/sorties, ou retours sans ticket
       await addMovement({
         productId: selectedProduct,
         productName: selectedProductData?.name || '',
         type,
         quantity: qty,
         note: note || undefined,
-        // Pour les retours : unitCost = prix de VENTE (ce que le client avait payé)
-        // Pour les entrées/sorties normales : unitCost = prix d'achat
         unitCost: type === 'return'
           ? selectedProductData?.price
           : selectedProductData?.cost,
@@ -83,8 +88,8 @@ export const StockMovementModal = ({ type, productId, onClose }: StockMovementMo
 
       toast.success(successMessages[type]);
       onClose();
-    } catch {
-      toast.error('Une erreur est survenue');
+    } catch (err: any) {
+      toast.error(err.message || 'Une erreur est survenue');
     } finally {
       setIsSubmitting(false);
     }
@@ -138,7 +143,23 @@ export const StockMovementModal = ({ type, productId, onClose }: StockMovementMo
           </Button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[80vh]">
+          {type === 'return' && (
+            <div className="space-y-2 pb-4 border-b border-border">
+              <Label htmlFor="ticketId">ID du Ticket (Recommandé)</Label>
+              <Input
+                id="ticketId"
+                value={ticketId}
+                onChange={(e) => setTicketId(e.target.value)}
+                className="input-modern"
+                placeholder="Ex: d4f8..."
+              />
+              <p className="text-[10px] text-muted-foreground">
+                S'il est fourni, le montant exact sera déduit du CA et le retour lié à la vente initiale.
+              </p>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="product">Produit *</Label>
             <Select value={selectedProduct} onValueChange={setSelectedProduct}>
