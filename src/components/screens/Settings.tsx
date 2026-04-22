@@ -108,6 +108,7 @@ export default function Settings() {
     localStorage.removeItem("stockpro_owner_pin");
     localStorage.removeItem("stockpro_pin_session");
     setHasPinConfigured(false);
+    setOwnerPin("");
     toast.success("Code PIN désactivé avec succès");
   };
 

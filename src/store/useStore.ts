@@ -507,13 +507,18 @@ export const useStore = create<StoreState>()(
       processReturn: async (ticketId, productId, quantity) => {
         const state = get();
         const userId = state.userId;
-        const originalSale = state.sales.find((s) => s.id === ticketId || s.id.startsWith(ticketId));
+        if (!ticketId || ticketId.trim() === "") throw new Error("Ticket ID est requis");
+        const originalSale = state.sales.find((s) => s.id === ticketId);
         if (!originalSale) throw new Error("Ticket introuvable");
 
-        const saleItem = originalSale.items.find((i) => i.product.id === productId);
-        if (!saleItem) throw new Error("Produit non trouvé dans ce ticket");
+        const saleItemIndex = originalSale.items.findIndex((i) => i.product.id === productId);
+        if (saleItemIndex === -1) throw new Error("Produit non trouvé dans ce ticket");
+        const saleItem = originalSale.items[saleItemIndex];
 
-        const qtyToReturn = Math.min(quantity, saleItem.quantity); // cannot return more than bought
+        const availableToReturn = saleItem.quantity - ((saleItem as any).returnedQuantity || (saleItem as any).returned || 0);
+        if (availableToReturn <= 0) throw new Error("Quantité maximale retournée pour ce produit");
+
+        const qtyToReturn = Math.min(quantity, availableToReturn);
         
         // Calculate price after discount: (price) * (1 - discountRatio)
         const discountRatio = originalSale.totalBrut > 0 ? (originalSale.discount / originalSale.totalBrut) : 0;
@@ -522,7 +527,7 @@ export const useStore = create<StoreState>()(
         // This is negative because it's a return
         const totalBrut = -(saleItem.product.price * qtyToReturn);
         const discount = -(saleItem.product.price * qtyToReturn * discountRatio); // effectively the discount part
-        const vatRate = state.vatRate || 0;
+        const vatRate = originalSale.vatRate ?? state.vatRate ?? 0;
         const newHT = totalBrut - discount; // totalBrut is negative, discount is negative. totalBrut - discount is effectivePriceHT * qty
         const vatTotal = newHT * (vatRate / 100);
         const totalFinal = newHT + vatTotal;
@@ -560,16 +565,25 @@ export const useStore = create<StoreState>()(
           id: crypto.randomUUID(),
           productId: saleItem.product.id,
           productName: saleItem.product.name,
-          type: 'sale' as const, // The RPC creates a sale movement, but with negative quantity it adds to stock
-          quantity: -qtyToReturn,
+          type: 'return' as const, // Expected by Reports.tsx
+          quantity: qtyToReturn,   // Positive quantity for return
           date: now,
           note: `Retour sur ticket #${originalSale.id.slice(0, 8)}`,
           paymentMethod: originalSale.paymentMethod,
           unitCost: saleItem.unitCost,
         }];
 
+        const updatedOriginalSale = {
+          ...originalSale,
+          items: [
+            ...originalSale.items.slice(0, saleItemIndex),
+            { ...saleItem, returnedQuantity: ((saleItem as any).returnedQuantity || (saleItem as any).returned || 0) + qtyToReturn },
+            ...originalSale.items.slice(saleItemIndex + 1),
+          ],
+        };
+
         set((prevState) => ({
-          sales: [tempSale, ...(prevState.sales || [])],
+          sales: [tempSale, ...prevState.sales.map(s => s.id === originalSale.id ? updatedOriginalSale : s)],
           movements: [...tempMovements, ...prevState.movements],
           products: prevState.products.map((p) => {
             if (p.id !== saleItem.product.id) return p;

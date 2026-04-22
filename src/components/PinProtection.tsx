@@ -67,7 +67,8 @@ export const PinProtection = ({ children }: PinProtectionProps) => {
                     <div>
                         <h2 className="text-2xl font-bold">Zone Protégée</h2>
                         <p className="text-muted-foreground mt-2 text-sm">
-                            Veuillez entrer le code PIN propriétaire pour accéder à cette page.
+                            Veuillez entrer le code PIN kiosque pour accéder à cette page.
+                            <br/><span className="text-[10px] text-red-400 italic">Note : Cette protection bloque uniquement l'accès local sur cet appareil.</span>
                         </p>
                     </div>
 

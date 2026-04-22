@@ -80,11 +80,14 @@ export default function ReceiptPage() {
             text += `Remise: -${(sale.discount || 0).toFixed(0)} FDJ\n`;
         }
         
-        text += `*NET À PAYER: ${(sale.totalFinal || sale.total || 0).toFixed(0)} FDJ*\n`;
+        const isReturn = sale.type === 'return';
+        const totalNet = Math.abs(sale.totalFinal || sale.total || 0);
+
+        text += `*${isReturn ? 'REMBOURSEMENT' : 'NET À PAYER'}: ${totalNet.toFixed(0)} FDJ*\n`;
         text += `Paiement: ${(sale.paymentMethod || '').replace('-', ' ').toUpperCase()}\n`;
-        if (sale.type !== 'return') {
-            text += `Payé: ${(sale.amountGiven || 0).toFixed(0)} FDJ\n`;
-            text += `Rendu: ${(sale.change || 0).toFixed(0)} FDJ\n`;
+        if (!isReturn) {
+            text += `Payé: ${Math.abs(sale.amountGiven || 0).toFixed(0)} FDJ\n`;
+            text += `Rendu: ${Math.abs(sale.change || 0).toFixed(0)} FDJ\n`;
         }
         text += `------------------------\n`;
         text += `Merci de votre visite !\n`;
@@ -160,9 +163,9 @@ export default function ReceiptPage() {
                                             {(item.product?.price ?? 0).toFixed(0)} FDJ
                                         </span>
                                     </td>
-                                    <td className="py-1 text-center align-top">{item.quantity}</td>
+                                    <td className="py-1 text-center align-top">{Math.abs(item.quantity)}</td>
                                     <td className="py-1 text-right align-top">
-                                        {((item.product?.price ?? 0) * item.quantity).toFixed(0)}
+                                        {Math.abs((item.product?.price ?? 0) * item.quantity).toFixed(0)}
                                     </td>
                                 </tr>
                             ))}
@@ -174,26 +177,26 @@ export default function ReceiptPage() {
                 <div className="border-t border-dashed border-black pt-2 space-y-1 text-xs">
                     <div className="flex justify-between">
                         <span>Total Brut</span>
-                        <span>{(sale.totalBrut || sale.total || 0).toFixed(0)} FDJ</span>
+                        <span>{Math.abs(sale.totalBrut || sale.total || 0).toFixed(0)} FDJ</span>
                     </div>
 
                     {(sale.vatRate || 0) > 0 && (
                         <div className="flex justify-between">
                             <span>TVA ({sale.vatRate || 0}%)</span>
-                            <span>{(sale.vatTotal || 0).toFixed(0)} FDJ</span>
+                            <span>{Math.abs(sale.vatTotal || 0).toFixed(0)} FDJ</span>
                         </div>
                     )}
 
                     {(sale.discount || 0) > 0 && (
                         <div className="flex justify-between">
                             <span>Remise</span>
-                            <span>-{(sale.discount || 0).toFixed(0)} FDJ</span>
+                            <span>-{Math.abs(sale.discount || 0).toFixed(0)} FDJ</span>
                         </div>
                     )}
 
                     <div className="flex justify-between font-bold text-sm border-t border-dashed border-black pt-1 mt-1">
-                        <span>NET À PAYER</span>
-                        <span>{(sale.totalFinal || sale.total || 0).toFixed(0)} FDJ</span>
+                        <span>{sale.type === 'return' ? 'REMBOURSEMENT' : 'NET À PAYER'}</span>
+                        <span>{Math.abs(sale.totalFinal || sale.total || 0).toFixed(0)} FDJ</span>
                     </div>
                 </div>
 
@@ -209,11 +212,11 @@ export default function ReceiptPage() {
                         <>
                             <div className="flex justify-between">
                                 <span>Reçu</span>
-                                <span>{(sale.amountGiven || 0).toFixed(0)} FDJ</span>
+                                <span>{Math.abs(sale.amountGiven || 0).toFixed(0)} FDJ</span>
                             </div>
                             <div className="flex justify-between">
                                 <span>Rendu</span>
-                                <span>{(sale.change || 0).toFixed(0)} FDJ</span>
+                                <span>{Math.abs(sale.change || 0).toFixed(0)} FDJ</span>
                             </div>
                         </>
                     )}
