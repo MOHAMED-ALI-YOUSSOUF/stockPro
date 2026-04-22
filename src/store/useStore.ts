@@ -71,6 +71,7 @@ interface StoreState {
 
   // Sales
   completeSale: (paymentMethod: string, discount?: number, amountGiven?: number) => Promise<Sale | null>;
+  processReturn: (ticketId: string, productId: string, quantity: number) => Promise<Sale | null>;
   getMonthlySales: () => { month: string; value: number }[];
 
   // Stats
@@ -399,10 +400,11 @@ export const useStore = create<StoreState>()(
         const cartItems = [...state.cart];
         const totalBrut = state.getCartTotal();
         const vatRate = state.vatRate || 0;
-        const vatTotal = totalBrut * (vatRate / 100);
-        const totalAfterVat = totalBrut + vatTotal;
-        const totalFinal = Math.max(0, totalAfterVat - discount);
-        const change = Math.max(0, amountGiven - totalFinal);
+        const newHT = totalBrut - discount;
+        const vatTotal = newHT * (vatRate / 100);
+        const totalAfterVat = newHT + vatTotal;
+        const totalFinal = totalAfterVat;
+        const change = amountGiven - totalFinal;
         const normalizedPaymentMethod = normalizePaymentMethod(paymentMethod);
 
         const saleData = {
@@ -498,6 +500,105 @@ export const useStore = create<StoreState>()(
         } else {
           // Offline : queue insert_sale uniquement (pas insert_movement)
           addToQueue({ type: 'insert_sale', payload: saleData });
+          return tempSale;
+        }
+      },
+
+      processReturn: async (ticketId, productId, quantity) => {
+        const state = get();
+        const userId = state.userId;
+        const originalSale = state.sales.find((s) => s.id === ticketId || s.id.startsWith(ticketId));
+        if (!originalSale) throw new Error("Ticket introuvable");
+
+        const saleItem = originalSale.items.find((i) => i.product.id === productId);
+        if (!saleItem) throw new Error("Produit non trouvé dans ce ticket");
+
+        const qtyToReturn = Math.min(quantity, saleItem.quantity); // cannot return more than bought
+        
+        // Calculate price after discount: (price) * (1 - discountRatio)
+        const discountRatio = originalSale.totalBrut > 0 ? (originalSale.discount / originalSale.totalBrut) : 0;
+        const effectivePriceHT = saleItem.product.price * (1 - discountRatio);
+        
+        // This is negative because it's a return
+        const totalBrut = -(saleItem.product.price * qtyToReturn);
+        const discount = -(saleItem.product.price * qtyToReturn * discountRatio); // effectively the discount part
+        const vatRate = state.vatRate || 0;
+        const newHT = totalBrut - discount; // totalBrut is negative, discount is negative. totalBrut - discount is effectivePriceHT * qty
+        const vatTotal = newHT * (vatRate / 100);
+        const totalFinal = newHT + vatTotal;
+
+        const returnSaleData = {
+          type: 'return' as const,
+          originalSaleId: originalSale.id,
+          items: [{
+            product: saleItem.product,
+            quantity: -qtyToReturn, // Negative quantity
+            unitCost: saleItem.unitCost, // keep original cost
+          }],
+          totalBrut,
+          vatRate,
+          vatTotal,
+          discount,
+          totalFinal,
+          amountGiven: 0,
+          change: 0, // No change for return, just a refund of totalFinal
+          paymentMethod: originalSale.paymentMethod, // Return via same method
+          storeName: state.storeName,
+        };
+
+        const tempSaleId = crypto.randomUUID();
+        const tempSale: Sale = {
+          ...returnSaleData,
+          id: tempSaleId,
+          total: totalFinal,
+          date: new Date(),
+          userId: userId || undefined,
+        };
+
+        const now = new Date();
+        const tempMovements: StockMovement[] = [{
+          id: crypto.randomUUID(),
+          productId: saleItem.product.id,
+          productName: saleItem.product.name,
+          type: 'sale' as const, // The RPC creates a sale movement, but with negative quantity it adds to stock
+          quantity: -qtyToReturn,
+          date: now,
+          note: `Retour sur ticket #${originalSale.id.slice(0, 8)}`,
+          paymentMethod: originalSale.paymentMethod,
+          unitCost: saleItem.unitCost,
+        }];
+
+        set((prevState) => ({
+          sales: [tempSale, ...(prevState.sales || [])],
+          movements: [...tempMovements, ...prevState.movements],
+          products: prevState.products.map((p) => {
+            if (p.id !== saleItem.product.id) return p;
+            return {
+              ...p,
+              quantity: p.quantity + qtyToReturn, // + because return
+              updatedAt: now,
+            };
+          }),
+        }));
+
+        setOfflineData('sales', get().sales);
+        setOfflineData('movements', get().movements);
+        setOfflineData('products', get().products);
+
+        if (isOnline() && userId) {
+          try {
+            const insertedSale = await insertSale(returnSaleData, userId);
+            set((prevState) => ({
+              sales: prevState.sales.map((s) => (s.id === tempSale.id ? insertedSale : s)),
+            }));
+            setOfflineData('sales', get().sales);
+            return insertedSale;
+          } catch (error) {
+            addToQueue({ type: 'insert_sale', payload: returnSaleData });
+            return tempSale;
+          }
+        } else {
+          addToQueue({ type: 'insert_sale', payload: returnSaleData });
           return tempSale;
         }
       },

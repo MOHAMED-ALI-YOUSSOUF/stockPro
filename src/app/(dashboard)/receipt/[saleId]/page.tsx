@@ -82,6 +82,10 @@ export default function ReceiptPage() {
         
         text += `*NET À PAYER: ${(sale.totalFinal || sale.total || 0).toFixed(0)} FDJ*\n`;
         text += `Paiement: ${(sale.paymentMethod || '').replace('-', ' ').toUpperCase()}\n`;
+        if (sale.type !== 'return') {
+            text += `Payé: ${(sale.amountGiven || 0).toFixed(0)} FDJ\n`;
+            text += `Rendu: ${(sale.change || 0).toFixed(0)} FDJ\n`;
+        }
         text += `------------------------\n`;
         text += `Merci de votre visite !\n`;
 
@@ -114,6 +118,11 @@ export default function ReceiptPage() {
                 {/* ── En-tête boutique ─────────────────────────────────────── */}
                 <div className="text-center mb-4 border-b border-dashed border-black pb-3">
                     <h1 className="font-bold text-lg uppercase tracking-wide">{displayStoreName}</h1>
+                    {sale.type === 'return' && (
+                        <div className="mt-1 mb-2 inline-block bg-black text-white px-2 py-0.5 text-[10px] font-bold tracking-widest uppercase">
+                            Ticket de Retour
+                        </div>
+                    )}
 
                     {/* Adresse — affichée uniquement si renseignée */}
                     {displayAddress && (
@@ -191,19 +200,23 @@ export default function ReceiptPage() {
                 {/* ── Paiement & Monnaie ──────────────────────────────────── */}
                 <div className="mt-3 border-t border-dashed border-black pt-2 space-y-1 text-xs">
                     <div className="flex justify-between">
-                        <span>Mode de paiement</span>
+                        <span>Mode de {sale.type === 'return' ? 'remboursement' : 'paiement'}</span>
                         <span className="uppercase font-medium">
                             {(sale.paymentMethod || '').replace('-', ' ')}
                         </span>
                     </div>
-                    <div className="flex justify-between">
-                        <span>Reçu</span>
-                        <span>{(sale.amountGiven || 0).toFixed(0)} FDJ</span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span>Rendu</span>
-                        <span>{(sale.change || 0).toFixed(0)} FDJ</span>
-                    </div>
+                    {sale.type !== 'return' && (
+                        <>
+                            <div className="flex justify-between">
+                                <span>Reçu</span>
+                                <span>{(sale.amountGiven || 0).toFixed(0)} FDJ</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span>Rendu</span>
+                                <span>{(sale.change || 0).toFixed(0)} FDJ</span>
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* ── Pied de page ────────────────────────────────────────── */}

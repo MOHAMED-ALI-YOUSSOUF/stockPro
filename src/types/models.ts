@@ -33,6 +33,8 @@ export interface CartItem {
 
 export interface Sale {
   id: string;
+  type?: 'sale' | 'return';
+  originalSaleId?: string;
   items: CartItem[];
   total: number; // legacy field
   totalBrut: number;

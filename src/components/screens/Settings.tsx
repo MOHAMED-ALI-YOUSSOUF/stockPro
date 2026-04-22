@@ -14,6 +14,7 @@ import {
   Ruler,
   Trash2,
   Plus,
+  Lock,
 } from "lucide-react";
 import {
   Card,
@@ -44,6 +45,8 @@ export default function Settings() {
   const [rate, setRate] = useState((vatRate ?? 0).toString());
   const [storeAddress, setStoreAddress] = useState(address ?? "");
   const [storePhone, setStorePhone] = useState(phone ?? "");
+  const [ownerPin, setOwnerPin] = useState("");
+  const [hasPinConfigured, setHasPinConfigured] = useState(false);
 
   // Protection : s'assure que categories et units sont toujours des tableaux
   const [storeCategories, setStoreCategories] = useState<string[]>(
@@ -64,6 +67,12 @@ export default function Settings() {
     // Toujours un tableau, même si la valeur venant du store est null/undefined
     setStoreCategories(Array.isArray(categories) ? categories : []);
     setStoreUnits(Array.isArray(units) ? units : []);
+    
+    // Check PIN in localstorage
+    const storedPin = localStorage.getItem("stockpro_owner_pin");
+    if (storedPin) {
+      setHasPinConfigured(true);
+    }
   }, [storeName, vatRate, address, phone, categories, units]);
 
   // ── Sauvegarde — envoie TOUS les champs à updateStoreSettings ────────────
@@ -80,6 +89,12 @@ export default function Settings() {
         categories: storeCategories.filter((c) => c.trim() !== ""),
         units: storeUnits.filter((u) => u.trim() !== ""),
       });
+      if (ownerPin) {
+        localStorage.setItem("stockpro_owner_pin", btoa(ownerPin));
+        setHasPinConfigured(true);
+        setOwnerPin("");
+      }
+
       toast.success("Paramètres enregistrés !");
     } catch (error) {
       console.error("[Settings] handleSave error:", error);
@@ -87,6 +102,13 @@ export default function Settings() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleRemovePin = () => {
+    localStorage.removeItem("stockpro_owner_pin");
+    localStorage.removeItem("stockpro_pin_session");
+    setHasPinConfigured(false);
+    toast.success("Code PIN désactivé avec succès");
   };
 
   // ── Helpers catégories ────────────────────────────────────────────────────
@@ -320,6 +342,55 @@ export default function Settings() {
               </div>
               <p className="text-xs text-muted-foreground pt-1">
                 Appliqué automatiquement à chaque nouvelle vente.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Sécurité (PIN) ────────────────────────────────────────────── */}
+        <Card className="border shadow-sm overflow-hidden">
+          <CardHeader className="bg-muted/50 border-b">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Lock className="w-5 h-5 text-red-500" />
+                <div>
+                  <CardTitle className="text-lg">Sécurité Propriétaire</CardTitle>
+                  <CardDescription>
+                    Protégez les rapports et l'historique avec un code PIN
+                  </CardDescription>
+                </div>
+              </div>
+              {hasPinConfigured && (
+                <Button 
+                  type="button" 
+                  variant="destructive" 
+                  size="sm" 
+                  onClick={handleRemovePin}
+                >
+                  Désactiver le PIN
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="space-y-2 max-w-[300px]">
+              <Label htmlFor="ownerPin" className="text-sm font-semibold">
+                {hasPinConfigured ? "Nouveau code PIN (laisser vide pour ne pas modifier)" : "Définir un code PIN (max 6 chiffres)"}
+              </Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="ownerPin"
+                  type="password"
+                  maxLength={6}
+                  value={ownerPin}
+                  onChange={(e) => setOwnerPin(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="Ex: 123456"
+                  className="pl-10 h-11 tracking-widest font-mono"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground pt-1">
+                Protège l'accès aux pages sensibles. Valable pour cet appareil.
               </p>
             </div>
           </CardContent>

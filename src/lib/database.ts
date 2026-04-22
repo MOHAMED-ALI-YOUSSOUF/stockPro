@@ -185,8 +185,22 @@ export async function fetchSales(): Promise<Sale[]> {
         quantity: item.quantity,
         unitCost: item.unit_cost_snapshot || item.product_cost || 0,
       }));
+    // Extract return info from store_name if it was used as fallback
+    let type: 'sale' | 'return' = 'sale';
+    let originalSaleId: string | undefined = undefined;
+    let cleanStoreName = sale.store_name || '';
+
+    if (cleanStoreName.includes('[RETURN]')) {
+      type = 'return';
+      const match = cleanStoreName.match(/\[RETURN:(.*?)\]/);
+      if (match) originalSaleId = match[1];
+      cleanStoreName = cleanStoreName.split('[RETURN]')[0].trim();
+    }
+
     return {
       id: sale.id,
+      type,
+      originalSaleId,
       items,
       total: sale.total_final || sale.total || 0,
       totalBrut: sale.total_brut || sale.total || 0,
@@ -199,13 +213,15 @@ export async function fetchSales(): Promise<Sale[]> {
       date: new Date(sale.created_at),
       paymentMethod: sale.payment_method as any,
       userId: sale.user_id,
-      storeName: sale.store_name || '',
+      storeName: cleanStoreName,
     };
   });
 }
 
 export async function insertSale(
   sale: {
+    type?: 'sale' | 'return';
+    originalSaleId?: string;
     items: CartItem[];
     totalBrut: number;
     vatRate: number;
@@ -235,7 +251,9 @@ export async function insertSale(
     p_montant_donne: sale.amountGiven,
     p_reste: sale.change,
     p_payment_method: sale.paymentMethod,
-    p_store_name: sale.storeName || '',
+    p_store_name: sale.type === 'return' 
+      ? `${sale.storeName || ''} [RETURN]${sale.originalSaleId ? ` [RETURN:${sale.originalSaleId}]` : ''}`.trim()
+      : (sale.storeName || ''),
     p_user_id: userId,
   };
 
@@ -250,6 +268,8 @@ export async function insertSale(
 
   return {
     id: saleId,
+    type: sale.type || 'sale',
+    originalSaleId: sale.originalSaleId,
     items: sale.items,
     total: sale.totalFinal,
     totalBrut: sale.totalBrut,

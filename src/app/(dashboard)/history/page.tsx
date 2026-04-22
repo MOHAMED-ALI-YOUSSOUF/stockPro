@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Eye, History as HistoryIcon, ArrowUpRight, ArrowDownLeft, ShoppingCart, Receipt } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { PinProtection } from '@/components/PinProtection';
 
 export default function HistoryPage() {
     const { sales, movements, isLoading } = useStore();
@@ -30,6 +31,7 @@ export default function HistoryPage() {
     }
 
     return (
+        <PinProtection>
         <div className="space-y-6 animate-fade-in">
             <div className="flex items-center justify-between">
                 <div>
@@ -70,12 +72,22 @@ export default function HistoryPage() {
                                 sales.map((sale) => (
                                     <TableRow key={sale.id}>
                                         <TableCell className="font-medium">
-                                            <div className="flex flex-col">
-                                                <span className="text-xs text-muted-foreground">#{sale.id.slice(0, 8).toUpperCase()}</span>
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-muted-foreground">#{sale.id.slice(0, 8).toUpperCase()}</span>
+                                                    {sale.type === 'return' && (
+                                                        <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4 rounded-sm bg-red-100 text-red-600 hover:bg-red-200 border-none">Retour</Badge>
+                                                    )}
+                                                </div>
                                                 <span>{new Date(sale.date).toLocaleString('fr-FR')}</span>
+                                                {sale.originalSaleId && (
+                                                    <span className="text-[10px] text-muted-foreground italic">
+                                                        Réf: #{sale.originalSaleId.slice(0, 8).toUpperCase()}
+                                                    </span>
+                                                )}
                                             </div>
                                         </TableCell>
-                                        <TableCell className="font-bold">
+                                        <TableCell className={cn("font-bold", sale.type === 'return' && "text-red-500")}>
                                             {(sale.totalFinal || sale.total).toFixed(0)}
                                         </TableCell>
                                         <TableCell>
@@ -175,5 +187,6 @@ export default function HistoryPage() {
                 </TabsContent>
             </Tabs>
         </div>
+        </PinProtection>
     );
 }
