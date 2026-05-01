@@ -304,6 +304,7 @@ export async function fetchSettings(userId: string) {
     vatRate: data?.vat_rate || 0,
     categories: data?.categories || [],
     units: data?.units || [],
+    kioskPin: data?.kiosk_pin || "",
   };
 }
 
@@ -311,21 +312,25 @@ export async function updateSettings(
   userId: string,
   settings: any
 ) {
+  const payload: Record<string, any> = {
+    user_id: userId,
+    store_name: settings.storeName,
+    address: settings.address,
+    phone: settings.phone,
+    vat_rate: settings.vatRate,
+    categories: settings.categories,
+    units: settings.units,
+    updated_at: new Date().toISOString(),
+  };
+
+  // Only persist kioskPin if explicitly provided
+  if (settings.kioskPin !== undefined) {
+    payload.kiosk_pin = settings.kioskPin || null;
+  }
+
   const { error } = await supabase
     .from("settings")
-    .upsert(
-      {
-        user_id: userId,
-        store_name: settings.storeName,
-        address: settings.address,
-        phone: settings.phone,
-        vat_rate: settings.vatRate,
-        categories: settings.categories,
-        units: settings.units,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" }
-    );
+    .upsert(payload, { onConflict: "user_id" });
 
   if (error) throw error;
 }

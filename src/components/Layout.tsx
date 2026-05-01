@@ -17,6 +17,8 @@ import {
     Loader2,
     History,
     Receipt,
+    BookOpen,
+    HelpCircle,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
@@ -31,6 +33,8 @@ const navItems = [
     { to: '/receipts', icon: Receipt, label: 'Tickets' },
     { to: '/stock', icon: ArrowLeftRight, label: 'Stock' },
     { to: '/reports', icon: BarChart3, label: 'Rapports' },
+    { to: '/guide', icon: BookOpen, label: 'Guide' },
+    { to: '/explain', icon: HelpCircle, label: 'Comment ça marche' },
 ];
 
 interface LayoutProps {

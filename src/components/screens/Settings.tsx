@@ -15,6 +15,10 @@ import {
   Trash2,
   Plus,
   Lock,
+  KeyRound,
+  Eye,
+  EyeOff,
+  ShieldOff,
 } from "lucide-react";
 import {
   Card,
@@ -36,6 +40,7 @@ export default function Settings() {
     phone,
     categories,
     units,
+    kioskPin,
     updateStoreSettings,
     isLoading,
   } = useStore();
@@ -45,8 +50,16 @@ export default function Settings() {
   const [rate, setRate] = useState((vatRate ?? 0).toString());
   const [storeAddress, setStoreAddress] = useState(address ?? "");
   const [storePhone, setStorePhone] = useState(phone ?? "");
-  const [ownerPin, setOwnerPin] = useState("");
-  const [hasPinConfigured, setHasPinConfigured] = useState(false);
+
+  // ── PIN state ──────────────────────────────────────────────────────────────
+  // Step 1 = enter current PIN (if one exists), Step 2 = set new PIN
+  const [pinStep, setPinStep] = useState<'idle' | 'verify' | 'change' | 'remove'>('idle');
+  const [currentPinInput, setCurrentPinInput] = useState('');
+  const [newPinInput, setNewPinInput] = useState('');
+  const [confirmPinInput, setConfirmPinInput] = useState('');
+  const [showPin, setShowPin] = useState(false);
+
+  const hasPinConfigured = !!kioskPin;
 
   // Protection : s'assure que categories et units sont toujours des tableaux
   const [storeCategories, setStoreCategories] = useState<string[]>(
@@ -64,15 +77,8 @@ export default function Settings() {
     setRate((vatRate ?? 0).toString());
     setStoreAddress(address ?? "");
     setStorePhone(phone ?? "");
-    // Toujours un tableau, même si la valeur venant du store est null/undefined
     setStoreCategories(Array.isArray(categories) ? categories : []);
     setStoreUnits(Array.isArray(units) ? units : []);
-    
-    // Check PIN in localstorage
-    const storedPin = localStorage.getItem("stockpro_owner_pin");
-    if (storedPin) {
-      setHasPinConfigured(true);
-    }
   }, [storeName, vatRate, address, phone, categories, units]);
 
   // ── Sauvegarde — envoie TOUS les champs à updateStoreSettings ────────────
@@ -85,16 +91,10 @@ export default function Settings() {
         rate: parseFloat(rate) || 0,
         address: storeAddress,
         phone: storePhone,
-        // Filtre les entrées vides avant de sauvegarder
         categories: storeCategories.filter((c) => c.trim() !== ""),
         units: storeUnits.filter((u) => u.trim() !== ""),
+        // PIN not modified here — handled separately
       });
-      if (ownerPin) {
-        localStorage.setItem("stockpro_owner_pin", btoa(ownerPin));
-        setHasPinConfigured(true);
-        setOwnerPin("");
-      }
-
       toast.success("Paramètres enregistrés !");
     } catch (error) {
       console.error("[Settings] handleSave error:", error);
@@ -104,12 +104,96 @@ export default function Settings() {
     }
   };
 
-  const handleRemovePin = () => {
-    localStorage.removeItem("stockpro_owner_pin");
-    localStorage.removeItem("stockpro_pin_session");
-    setHasPinConfigured(false);
-    setOwnerPin("");
-    toast.success("Code PIN désactivé avec succès");
+  // ── PIN Handlers ──────────────────────────────────────────────────────────
+  const handleStartPinChange = () => {
+    setCurrentPinInput('');
+    setNewPinInput('');
+    setConfirmPinInput('');
+    if (hasPinConfigured) {
+      // Must verify current PIN first
+      setPinStep('verify');
+    } else {
+      // No PIN yet — go directly to change
+      setPinStep('change');
+    }
+  };
+
+  const handleStartPinRemove = () => {
+    setCurrentPinInput('');
+    if (hasPinConfigured) {
+      setPinStep('remove');
+    }
+  };
+
+  const handleVerifyCurrentPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (currentPinInput === kioskPin) {
+      setPinStep('change');
+      setCurrentPinInput('');
+    } else {
+      toast.error("Code PIN actuel incorrect");
+      setCurrentPinInput('');
+    }
+  };
+
+  const handleVerifyForRemove = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (currentPinInput === kioskPin) {
+      try {
+        await updateStoreSettings({
+          name, rate: parseFloat(rate) || 0,
+          address: storeAddress, phone: storePhone,
+          categories: storeCategories.filter(c => c.trim() !== ''),
+          units: storeUnits.filter(u => u.trim() !== ''),
+          kioskPin: '',
+        });
+        localStorage.removeItem('stockpro_pin_session');
+        setPinStep('idle');
+        setCurrentPinInput('');
+        toast.success("Code PIN désactivé avec succès");
+      } catch {
+        toast.error("Erreur lors de la suppression du PIN");
+      }
+    } else {
+      toast.error("Code PIN actuel incorrect");
+      setCurrentPinInput('');
+    }
+  };
+
+  const handleSetNewPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPinInput.length < 4) {
+      toast.error("Le code PIN doit contenir au moins 4 chiffres");
+      return;
+    }
+    if (newPinInput !== confirmPinInput) {
+      toast.error("Les codes PIN ne correspondent pas");
+      setConfirmPinInput('');
+      return;
+    }
+    try {
+      await updateStoreSettings({
+        name, rate: parseFloat(rate) || 0,
+        address: storeAddress, phone: storePhone,
+        categories: storeCategories.filter(c => c.trim() !== ''),
+        units: storeUnits.filter(u => u.trim() !== ''),
+        kioskPin: newPinInput,
+      });
+      localStorage.removeItem('stockpro_pin_session');
+      setPinStep('idle');
+      setNewPinInput('');
+      setConfirmPinInput('');
+      toast.success("Code PIN mis à jour avec succès !");
+    } catch {
+      toast.error("Erreur lors de la mise à jour du PIN");
+    }
+  };
+
+  const handleCancelPin = () => {
+    setPinStep('idle');
+    setCurrentPinInput('');
+    setNewPinInput('');
+    setConfirmPinInput('');
   };
 
   // ── Helpers catégories ────────────────────────────────────────────────────
@@ -348,87 +432,8 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* ── Sécurité (PIN) ────────────────────────────────────────────── */}
-        <Card className="border shadow-sm overflow-hidden">
-          <CardHeader className="bg-muted/50 border-b">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Lock className="w-5 h-5 text-red-500" />
-                <div>
-                  <CardTitle className="text-lg">Sécurité Propriétaire</CardTitle>
-                  <CardDescription>
-                    Protégez les rapports et l'historique avec un code PIN
-                  </CardDescription>
-                </div>
-              </div>
-              {hasPinConfigured && (
-                <Button 
-                  type="button" 
-                  variant="destructive" 
-                  size="sm" 
-                  onClick={handleRemovePin}
-                >
-                  Désactiver le PIN
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="space-y-2 max-w-[300px]">
-              <Label htmlFor="ownerPin" className="text-sm font-semibold">
-                {hasPinConfigured ? "Nouveau code PIN (laisser vide pour ne pas modifier)" : "Définir un code PIN (max 6 chiffres)"}
-              </Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="ownerPin"
-                  type="password"
-                  maxLength={6}
-                  value={ownerPin}
-                  onChange={(e) => setOwnerPin(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="Ex: 123456"
-                  className="pl-10 h-11 tracking-widest font-mono"
-                />
-              </div>
-              <p className="text-xs text-muted-foreground pt-1">
-                Protège l'accès aux pages sensibles. Valable pour cet appareil.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* ── Info cards ────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card className="bg-primary/5 border-primary/10">
-            <CardContent className="p-4 flex gap-4">
-              <div className="p-2 bg-primary/10 rounded-lg h-fit">
-                <ShieldCheck className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="font-semibold text-sm">Données sécurisées</p>
-                <p className="text-xs text-muted-foreground">
-                  Vos paramètres sont synchronisés avec votre compte Supabase.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-blue-50 border-blue-100">
-            <CardContent className="p-4 flex gap-4">
-              <div className="p-2 bg-blue-100 rounded-lg h-fit">
-                <Smartphone className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="font-semibold text-sm text-blue-700">Mode Hors-ligne</p>
-                <p className="text-xs text-blue-600/80">
-                  Les modifications sont enregistrées localement si vous perdez la connexion.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
         {/* ── Bouton Sauvegarder ────────────────────────────────────────── */}
-        <div className="flex justify-end pt-4">
+        <div className="flex justify-end pt-2">
           <Button
             type="submit"
             disabled={isSaving || isLoading}
@@ -445,6 +450,194 @@ export default function Settings() {
           </Button>
         </div>
       </form>
+
+      {/* ── Sécurité (PIN) — HORS DU FORM PRINCIPAL ──────────────────── */}
+      <Card className="border shadow-sm overflow-hidden">
+        <CardHeader className="bg-muted/50 border-b">
+          <div className="flex items-center gap-2">
+            <Lock className="w-5 h-5 text-red-500" />
+            <div>
+              <CardTitle className="text-lg">Sécurité Propriétaire</CardTitle>
+              <CardDescription>
+                {hasPinConfigured
+                  ? "Un code PIN est actif. Seul le propriétaire peut le modifier."
+                  : "Protégez les rapports et l'historique avec un code PIN"}
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6">
+
+          {/* ─ Idle state ─ */}
+          {pinStep === 'idle' && (
+            <div className="flex flex-wrap gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleStartPinChange}
+                className="flex items-center gap-2"
+              >
+                <KeyRound className="w-4 h-4" />
+                {hasPinConfigured ? "Modifier le code PIN" : "Définir un code PIN"}
+              </Button>
+              {hasPinConfigured && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleStartPinRemove}
+                  className="flex items-center gap-2"
+                >
+                  <ShieldOff className="w-4 h-4" />
+                  Désactiver le PIN
+                </Button>
+              )}
+              {hasPinConfigured && (
+                <p className="w-full text-xs text-green-600 flex items-center gap-1 mt-1">
+                  <ShieldCheck className="w-3 h-3" /> Code PIN actif — rapports protégés sur tous vos appareils
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ─ Step: Verify current PIN before changing ─ */}
+          {pinStep === 'verify' && (
+            <form onSubmit={handleVerifyCurrentPin} className="space-y-4 max-w-xs">
+              <p className="text-sm text-muted-foreground">
+                Entrez votre <strong>code PIN actuel</strong> pour continuer :
+              </p>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  type={showPin ? "text" : "password"}
+                  maxLength={6}
+                  value={currentPinInput}
+                  onChange={(e) => setCurrentPinInput(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="PIN actuel"
+                  className="pl-10 pr-10 h-11 tracking-widest font-mono"
+                  autoFocus
+                />
+                <button type="button" tabIndex={-1}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  onClick={() => setShowPin(v => !v)}>
+                  {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={handleCancelPin} className="flex-1">Annuler</Button>
+                <Button type="submit" className="flex-1">Vérifier</Button>
+              </div>
+            </form>
+          )}
+
+          {/* ─ Step: Verify current PIN before removing ─ */}
+          {pinStep === 'remove' && (
+            <form onSubmit={handleVerifyForRemove} className="space-y-4 max-w-xs">
+              <p className="text-sm text-amber-600 font-medium">
+                ⚠️ Confirmez votre PIN pour désactiver la protection :
+              </p>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  type={showPin ? "text" : "password"}
+                  maxLength={6}
+                  value={currentPinInput}
+                  onChange={(e) => setCurrentPinInput(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="PIN actuel"
+                  className="pl-10 pr-10 h-11 tracking-widest font-mono"
+                  autoFocus
+                />
+                <button type="button" tabIndex={-1}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  onClick={() => setShowPin(v => !v)}>
+                  {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={handleCancelPin} className="flex-1">Annuler</Button>
+                <Button type="submit" variant="destructive" className="flex-1">Désactiver</Button>
+              </div>
+            </form>
+          )}
+
+          {/* ─ Step: Set new PIN ─ */}
+          {pinStep === 'change' && (
+            <form onSubmit={handleSetNewPin} className="space-y-4 max-w-xs">
+              <p className="text-sm text-muted-foreground">
+                {hasPinConfigured ? "Définissez votre nouveau code PIN :" : "Créez votre code PIN propriétaire :"}
+              </p>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Nouveau code PIN (4-6 chiffres)</Label>
+                <div className="relative">
+                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type={showPin ? "text" : "password"}
+                    maxLength={6}
+                    value={newPinInput}
+                    onChange={(e) => setNewPinInput(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="Nouveau PIN"
+                    className="pl-10 pr-10 h-11 tracking-widest font-mono"
+                    autoFocus
+                  />
+                  <button type="button" tabIndex={-1}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    onClick={() => setShowPin(v => !v)}>
+                    {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Confirmer le code PIN</Label>
+                <div className="relative">
+                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type={showPin ? "text" : "password"}
+                    maxLength={6}
+                    value={confirmPinInput}
+                    onChange={(e) => setConfirmPinInput(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="Confirmez le PIN"
+                    className="pl-10 h-11 tracking-widest font-mono"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={handleCancelPin} className="flex-1">Annuler</Button>
+                <Button type="submit" className="flex-1">Enregistrer le PIN</Button>
+              </div>
+            </form>
+          )}
+
+        </CardContent>
+      </Card>
+
+      {/* ── Info cards ──────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="bg-primary/5 border-primary/10">
+          <CardContent className="p-4 flex gap-4">
+            <div className="p-2 bg-primary/10 rounded-lg h-fit">
+              <ShieldCheck className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm">Données sécurisées</p>
+              <p className="text-xs text-muted-foreground">
+                Vos paramètres et code PIN sont synchronisés avec Supabase sur tous vos appareils.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-blue-50 border-blue-100">
+          <CardContent className="p-4 flex gap-4">
+            <div className="p-2 bg-blue-100 rounded-lg h-fit">
+              <Smartphone className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm text-blue-700">Mode Hors-ligne</p>
+              <p className="text-xs text-blue-600/80">
+                Les modifications sont enregistrées localement si vous perdez la connexion.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

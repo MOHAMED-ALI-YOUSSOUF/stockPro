@@ -6,6 +6,7 @@ create table if not exists settings (
   id uuid default uuid_generate_v4() primary key,
   user_id uuid references auth.users(id) not null unique,
   vat_rate numeric default 0,
+  kiosk_pin text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );

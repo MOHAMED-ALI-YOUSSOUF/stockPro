@@ -48,6 +48,7 @@ interface StoreState {
   phone: string;
   categories: string[];
   units: string[];
+  kioskPin: string;
 
   // Init
   setUserId: (id: string | null) => void;
@@ -89,6 +90,7 @@ interface StoreState {
     phone?: string;
     categories?: string[];
     units?: string[];
+    kioskPin?: string;
   }) => Promise<void>;
 }
 
@@ -128,6 +130,7 @@ export const useStore = create<StoreState>()(
       phone: '',
       categories: [],
       units: [],
+      kioskPin: '',
 
       setPendingOps: (count) => set({ pendingOps: count }),
       setIsSyncing: (value) => set({ isSyncing: value }),
@@ -152,6 +155,7 @@ export const useStore = create<StoreState>()(
             let phone = '';
             let categories: string[] = [];
             let units: string[] = [];
+            let kioskPin = '';
 
             const currentUserId = get().userId;
             if (currentUserId) {
@@ -163,12 +167,13 @@ export const useStore = create<StoreState>()(
                 phone = settings.phone ?? '';
                 categories = Array.isArray(settings.categories) ? settings.categories : [];
                 units = Array.isArray(settings.units) ? settings.units : [];
+                kioskPin = settings.kioskPin ?? '';
               } catch (e) {
                 console.error('Failed to fetch settings', e);
               }
             }
 
-            set({ products, movements, sales, vatRate, storeName, address, phone, categories, units, lastSyncAt: Date.now() });
+            set({ products, movements, sales, vatRate, storeName, address, phone, categories, units, kioskPin, lastSyncAt: Date.now() });
 
             setOfflineData('products', products);
             setOfflineData('movements', movements);
@@ -179,6 +184,7 @@ export const useStore = create<StoreState>()(
             setOfflineData('phone', phone);
             setOfflineData('categories', categories);
             setOfflineData('units', units);
+            setOfflineData('kioskPin', kioskPin);
           } else {
             const products = getOfflineData<Product[]>('products') || [];
             const movements = getOfflineData<StockMovement[]>('movements') || [];
@@ -189,7 +195,8 @@ export const useStore = create<StoreState>()(
             const phone = getOfflineData<string>('phone') || '';
             const categories = Array.isArray(getOfflineData('categories')) ? getOfflineData<string[]>('categories')! : [];
             const units = Array.isArray(getOfflineData('units')) ? getOfflineData<string[]>('units')! : [];
-            set({ products, movements, sales, vatRate, storeName, address, phone, categories, units });
+            const kioskPin = getOfflineData<string>('kioskPin') || '';
+            set({ products, movements, sales, vatRate, storeName, address, phone, categories, units, kioskPin });
           }
         } catch (error) {
           console.error('Failed to load data:', error);
@@ -508,7 +515,12 @@ export const useStore = create<StoreState>()(
         const state = get();
         const userId = state.userId;
         if (!ticketId || ticketId.trim() === "") throw new Error("Ticket ID est requis");
-        const originalSale = state.sales.find((s) => s.id === ticketId);
+        // Match by prefix (first 8 chars printed on receipt) or full UUID
+        const ticketLower = ticketId.trim().toLowerCase();
+        const originalSale = state.sales.find((s) =>
+          s.id.toLowerCase() === ticketLower ||
+          s.id.toLowerCase().startsWith(ticketLower)
+        );
         if (!originalSale) throw new Error("Ticket introuvable");
 
         const saleItemIndex = originalSale.items.findIndex((i) => i.product.id === productId);
@@ -655,12 +667,13 @@ export const useStore = create<StoreState>()(
         await current.updateStoreSettings({ name: current.storeName, rate });
       },
 
-      updateStoreSettings: async ({ name, rate, address, phone, categories, units }) => {
+      updateStoreSettings: async ({ name, rate, address, phone, categories, units, kioskPin }) => {
         const current = get();
         const newAddress = address !== undefined ? address : current.address;
         const newPhone = phone !== undefined ? phone : current.phone;
         const newCategories = Array.isArray(categories) ? categories : current.categories;
         const newUnits = Array.isArray(units) ? units : current.units;
+        const newKioskPin = kioskPin !== undefined ? kioskPin : current.kioskPin;
 
         // Optimistic update
         set({
@@ -670,6 +683,7 @@ export const useStore = create<StoreState>()(
           phone: newPhone,
           categories: newCategories,
           units: newUnits,
+          kioskPin: newKioskPin,
         });
 
         // Persiste offline
@@ -679,6 +693,7 @@ export const useStore = create<StoreState>()(
         setOfflineData('phone', newPhone);
         setOfflineData('categories', newCategories);
         setOfflineData('units', newUnits);
+        setOfflineData('kioskPin', newKioskPin);
 
         const userId = get().userId;
         const settingsPayload = {
@@ -688,6 +703,7 @@ export const useStore = create<StoreState>()(
           phone: newPhone,
           categories: newCategories,
           units: newUnits,
+          kioskPin: kioskPin !== undefined ? newKioskPin : undefined,
         };
 
         if (isOnline() && userId) {
